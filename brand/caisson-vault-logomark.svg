@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Caisson vault emblem">
+  <title>Caisson — Vault emblem (primary mark)</title>
+  <defs>
+    <linearGradient id="vault-rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3A4668"/>
+      <stop offset="0.5" stop-color="#263156"/>
+      <stop offset="1" stop-color="#151C36"/>
+    </linearGradient>
+    <linearGradient id="vault-face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1B2440"/>
+      <stop offset="1" stop-color="#0C1122"/>
+    </linearGradient>
+    <radialGradient id="vault-seal" cx="0.5" cy="0.38" r="0.72">
+      <stop offset="0" stop-color="#FFD77A"/>
+      <stop offset="0.55" stop-color="#F4B23C"/>
+      <stop offset="1" stop-color="#B9781E"/>
+    </radialGradient>
+    <filter id="vault-glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- outer vault body -->
+  <polygon points="100,10 177.9,55 177.9,145 100,190 22.1,145 22.1,55"
+           fill="url(#vault-rim)" stroke="#060912" stroke-width="6" stroke-linejoin="round"/>
+  <!-- vault door face -->
+  <polygon points="100,32 158.9,66 158.9,134 100,166 41.1,134 41.1,66"
+           fill="url(#vault-face)" stroke="#060912" stroke-width="4" stroke-linejoin="round"/>
+
+  <!-- glowing seams: center to each face vertex -->
+  <g filter="url(#vault-glow)" stroke="#37E1D6" stroke-width="4" stroke-linecap="round">
+    <line x1="100" y1="100" x2="100" y2="32"/>
+    <line x1="100" y1="100" x2="158.9" y2="66"/>
+    <line x1="100" y1="100" x2="158.9" y2="134"/>
+    <line x1="100" y1="100" x2="100" y2="166"/>
+    <line x1="100" y1="100" x2="41.1" y2="134"/>
+    <line x1="100" y1="100" x2="41.1" y2="66"/>
+  </g>
+
+  <!-- gold rivets at face vertices -->
+  <g fill="#F4B23C">
+    <circle cx="100" cy="32" r="3.4"/>
+    <circle cx="158.9" cy="66" r="3.4"/>
+    <circle cx="158.9" cy="134" r="3.4"/>
+    <circle cx="100" cy="166" r="3.4"/>
+    <circle cx="41.1" cy="134" r="3.4"/>
+    <circle cx="41.1" cy="66" r="3.4"/>
+  </g>
+
+  <!-- central hex lock + gold seal -->
+  <polygon points="100,72 124.2,86 124.2,114 100,128 75.8,114 75.8,86"
+           fill="url(#vault-seal)" stroke="#060912" stroke-width="3.5" stroke-linejoin="round"/>
+  <!-- keyhole: nothing in or out without the key -->
+  <circle cx="100" cy="96" r="6" fill="#060912"/>
+  <polygon points="96,100 104,100 106.5,117 93.5,117" fill="#060912"/>
+</svg>

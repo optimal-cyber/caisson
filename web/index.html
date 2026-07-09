@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Caisson — Compliance-native airgap delivery</title>
+  <meta name="description" content="Caisson packages carry their own SBOM attestations, NIST 800-53 / CMMC control evidence, and cryptographic provenance — so what lands in the disconnected environment arrives sealed, signed, and assessment-ready."/>
+  <link rel="icon" type="image/svg+xml" href="assets/caisson-vault-logomark.svg"/>
+  <meta property="og:title" content="Caisson — Compliance-native airgap delivery"/>
+  <meta property="og:description" content="Nothing crosses the gap unsealed. Sealed at the source. Evidence on arrival."/>
+  <meta property="og:type" content="website"/>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <!-- ===== NAV ===== -->
+  <header class="nav">
+    <a class="brand" href="#top" aria-label="Caisson home">
+      <img class="brand-mark" src="assets/caisson-vault-logomark.svg" width="34" height="34" alt=""/>
+      <span class="brand-name">CAISSON</span>
+    </a>
+    <nav class="nav-links">
+      <a href="#use">Use it to</a>
+      <a href="#why">Why Caisson</a>
+      <a href="#cli">CLI</a>
+      <a href="https://github.com/optimal-cyber/caisson" class="nav-cta">GitHub &rsaquo;</a>
+    </nav>
+  </header>
+
+  <!-- ===== HERO ===== -->
+  <main id="top">
+    <section class="hero">
+      <div class="hero-grid"></div>
+      <div class="hero-copy">
+        <p class="eyebrow">Compliance-native airgap delivery</p>
+        <h1>Nothing crosses<br/>the gap <span class="cy">unsealed</span>.</h1>
+        <p class="lede">
+          Caisson packages carry their own SBOM attestations, NIST&nbsp;800-53 / CMMC control
+          evidence, and cryptographic provenance — so what lands in your disconnected
+          environment arrives <strong>sealed, signed, and ready for assessment</strong>.
+        </p>
+        <p class="tagline">Sealed at the source. Evidence on arrival.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#cli">See the workflow</a>
+          <a class="btn btn-ghost" href="https://github.com/optimal-cyber/caisson">Read the docs</a>
+        </div>
+        <p class="hero-foot">Open source · built for DoD programs, defense contractors &amp; regulated critical infrastructure.</p>
+      </div>
+      <div class="hero-art">
+        <img src="assets/caisson-hero.svg" alt="Caisson, an armored combat-engineer guardian, raising a glowing hex keybolt to seal the hexagonal vault on his back" width="720" height="960"/>
+      </div>
+    </section>
+
+    <!-- ===== TRUST STRIP ===== -->
+    <section class="strip" aria-label="What every package carries">
+      <div class="strip-item"><span class="chip">SBOM</span> Signed component inventory travels inside the package.</div>
+      <div class="strip-item"><span class="chip">800-53 / CMMC</span> Control evidence mapped and bundled, not bolted on later.</div>
+      <div class="strip-item"><span class="chip">Provenance</span> Cryptographic chain from build host to disconnected deploy.</div>
+    </section>
+
+    <!-- ===== USE IT TO ===== -->
+    <section id="use" class="section">
+      <h2 class="section-title">Use it to</h2>
+      <p class="section-sub">One sealed artifact, three jobs done before it ever leaves the connected side.</p>
+      <div class="cols">
+        <article class="card">
+          <div class="card-ico" aria-hidden="true">▣</div>
+          <h3>Seal a release for the gap</h3>
+          <p>
+            Wrap an application, its images, and its dependencies into a single
+            <code>.caisson</code> vault. The manifest, SBOM, and provenance are computed
+            once, at the source, and locked in.
+          </p>
+        </article>
+        <article class="card">
+          <div class="card-ico" aria-hidden="true">◈</div>
+          <h3>Carry the evidence with the payload</h3>
+          <p>
+            NIST 800-53 and CMMC control mappings ride <em>inside</em> the package. When it
+            lands, the evidence lands with it — no scramble to reconstruct what shipped or
+            reconcile a separate paper trail.
+          </p>
+        </article>
+        <article class="card">
+          <div class="card-ico" aria-hidden="true">⛨</div>
+          <h3>Deploy into denied territory</h3>
+          <p>
+            Push the vault across the airgap onto your OCI registry and Kubernetes on the far
+            side. Caisson verifies the seal on arrival and exports assessment-ready evidence
+            for your ISSM and assessors.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ===== CLI ===== -->
+    <section id="cli" class="section">
+      <h2 class="section-title">The workflow, start to seal</h2>
+      <p class="section-sub">Two commands from build host to disconnected deploy. The evidence comes with it.</p>
+      <div class="terminal" role="img" aria-label="Terminal showing caisson package create and caisson deploy commands">
+        <div class="term-bar">
+          <span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>
+          <span class="term-title">operator@buildhost — caisson</span>
+        </div>
+        <pre class="term-body"><code><span class="cmt"># seal a release at the source — SBOM + control evidence computed once</span>
+<span class="pr">$</span> <span class="cm">caisson</span> package create ./my-app
+  <span class="ok">✓</span> resolved 42 components · SBOM sealed
+  <span class="ok">✓</span> mapped 61 NIST 800-53 controls · CMMC L2 evidence attached
+  <span class="ok">✓</span> provenance signed · <span class="gd">my-app.caisson</span> ready
+
+<span class="cmt"># carry it across the gap and export evidence on arrival</span>
+<span class="pr">$</span> <span class="cm">caisson</span> deploy my-app.caisson --evidence-export
+  <span class="ok">✓</span> seal verified · provenance chain intact
+  <span class="ok">✓</span> images pushed to airgapped registry · workloads applied
+  <span class="ok">✓</span> evidence bundle exported → <span class="gd">./evidence/my-app/</span></code></pre>
+      </div>
+      <p class="cli-note"><span class="mono">caisson</span> with no arguments prints the map — and one honest promise: <em>"If it isn't sealed, it isn't shipped."</em></p>
+    </section>
+
+    <!-- ===== WHY ===== -->
+    <section id="why" class="section why">
+      <h2 class="section-title">Why Caisson vs. rolling your own</h2>
+      <p class="section-sub">
+        You can script <span class="mono">tar</span>, a registry mirror, and a folder of PDFs across the airgap.
+        The problem is never day one — it's the assessment six months later, when nobody can prove
+        what actually shipped.
+      </p>
+      <div class="why-grid">
+        <div class="why-col why-roll">
+          <h3>Rolling your own</h3>
+          <ul>
+            <li><span class="x">✕</span> SBOM, control docs, and the artifact drift apart the moment they leave the pipeline.</li>
+            <li><span class="x">✕</span> Evidence is reconstructed by hand for every assessment — from memory and stale wikis.</li>
+            <li><span class="x">✕</span> "Which build is running behind the gap?" has no cryptographic answer.</li>
+            <li><span class="x">✕</span> Every program reinvents the same brittle mirror scripts.</li>
+          </ul>
+        </div>
+        <div class="why-col why-cais">
+          <h3><img src="assets/caisson-vault-logomark.svg" width="22" height="22" alt=""/> With Caisson</h3>
+          <ul>
+            <li><span class="ok">✓</span> The package <strong>is</strong> the evidence — SBOM, control mappings, and provenance are sealed inside one artifact.</li>
+            <li><span class="ok">✓</span> Tamper-evident seal verified on arrival; the chain proves build host → disconnected deploy.</li>
+            <li><span class="ok">✓</span> <span class="mono">evidence export</span> produces the assessment package from the artifact itself — not a parallel binder.</li>
+            <li><span class="ok">✓</span> Complements the airgap tooling you already run instead of replacing it.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="why-foot">
+        Caisson doesn't reinvent airgap transfer or Kubernetes. It wraps the OCI registries and clusters
+        you already deploy to, and makes the compliance evidence a first-class, sealed part of the payload.
+        <a href="https://github.com/optimal-cyber/caisson">See how it interoperates &rsaquo;</a>
+      </p>
+    </section>
+
+    <!-- ===== MEET CAISSON ===== -->
+    <section class="section meet">
+      <img class="meet-helm" src="assets/caisson-helm-logomark.svg" width="120" height="120" alt="Caisson's helm"/>
+      <div class="meet-copy">
+        <h2 class="section-title">Meet Caisson</h2>
+        <p>
+          A combat engineer who learned two trades nobody else would take: sinking foundations under
+          crushing pressure, and hauling live payloads across ground where the road home is already cut.
+          He carries the sealed hexagonal vault into the deepest airgapped dark and never asks what's
+          inside — he only guarantees it lands <em>sealed, signed, and standing</em>.
+        </p>
+        <p class="catch">"Nothing crosses the gap unsealed."</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="footer">
+    <div class="footer-brand">
+      <img src="assets/caisson-vault-logomark.svg" width="28" height="28" alt=""/>
+      <span>CAISSON</span>
+    </div>
+    <p class="footer-tag">Compliance-native airgap delivery. Open source.</p>
+    <p class="footer-credit">
+      A <a href="https://gooptimal.io">GoOptimal</a> project by Optimal&nbsp;Labs.
+      &nbsp;·&nbsp; <a href="https://github.com/optimal-cyber/caisson">GitHub</a>
+    </p>
+    <p class="footer-fine">Caisson is complementary to existing airgap tooling — not a replacement for it.</p>
+  </footer>
+
+  <script src="main.js" defer></script>
+</body>
+</html>

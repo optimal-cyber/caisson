@@ -1,0 +1,21 @@
+# Compiled binary (produced by `go build -o caisson .`)
+/caisson
+caisson
+*.exe
+*.test
+*.out
+
+# Generated Caisson vaults & exported evidence
+*.caisson
+/evidence/
+
+# Go workspace
+/vendor/
+go.work
+go.work.sum
+
+# Editor / OS cruft
+.DS_Store
+.idea/
+.vscode/
+*.swp

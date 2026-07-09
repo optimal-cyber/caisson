@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Caisson helm">
+  <title>Caisson — Helm (secondary / community mark)</title>
+  <defs>
+    <linearGradient id="helm-plate" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#5A6B96"/>
+      <stop offset="0.45" stop-color="#3A4668"/>
+      <stop offset="1" stop-color="#1B2440"/>
+    </linearGradient>
+    <radialGradient id="helm-eye" cx="0.4" cy="0.35" r="0.85">
+      <stop offset="0" stop-color="#CFFFFB"/>
+      <stop offset="0.4" stop-color="#7FF5EE"/>
+      <stop offset="1" stop-color="#37E1D6"/>
+    </radialGradient>
+    <filter id="helm-glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- crest -->
+  <polygon points="100,14 116,23 116,41 100,50 84,41 84,23"
+           fill="#F4B23C" stroke="#060912" stroke-width="4" stroke-linejoin="round"/>
+  <rect x="96" y="38" width="8" height="12" fill="#B9781E"/>
+
+  <!-- big round head -->
+  <path d="M40,102 C40,58 66,34 100,34 C134,34 160,58 160,102 C160,136 142,160 100,164 C58,160 40,136 40,102 Z"
+        fill="url(#helm-plate)" stroke="#060912" stroke-width="7" stroke-linejoin="round"/>
+  <!-- cel shine -->
+  <path d="M56,86 C53,60 74,42 100,40 C82,50 66,70 60,92 Z" fill="#6E80AC" opacity="0.45"/>
+
+  <!-- visor goggle plate -->
+  <path d="M60,92 C60,76 76,70 100,70 C124,70 140,76 140,92 C140,118 122,132 100,133 C78,132 60,118 60,92 Z"
+        fill="#0B1020" stroke="#060912" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- big friendly eyes -->
+  <g filter="url(#helm-glow)">
+    <ellipse cx="85" cy="100" rx="12" ry="15" fill="url(#helm-eye)"/>
+    <ellipse cx="115" cy="100" rx="12" ry="15" fill="url(#helm-eye)"/>
+  </g>
+  <g fill="#FFFFFF">
+    <circle cx="81" cy="94" r="3.6"/><circle cx="111" cy="94" r="3.6"/>
+  </g>
+
+  <!-- gold nose + cheek bolts -->
+  <polygon points="98,134 102,134 101,145 99,145" fill="#F4B23C"/>
+  <g fill="#F4B23C"><circle cx="58" cy="112" r="3.4"/><circle cx="142" cy="112" r="3.4"/></g>
+  <!-- tiny friendly smile -->
+  <g filter="url(#helm-glow)">
+    <path d="M88,150 Q100,160 112,150" fill="none" stroke="#7FF5EE" stroke-width="4" stroke-linecap="round"/>
+  </g>
+</svg>
