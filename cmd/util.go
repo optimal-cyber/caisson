@@ -1,6 +1,12 @@
 package cmd
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
+
+// joinComma joins parts with ", ".
+func joinComma(parts []string) string { return strings.Join(parts, ", ") }
 
 // humanSize renders a byte count as a compact human-readable string.
 func humanSize(n int64) string {

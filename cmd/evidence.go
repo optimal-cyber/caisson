@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"time"
+
 	"github.com/optimal-cyber/caisson/internal/evidence"
 	"github.com/optimal-cyber/caisson/internal/pkgformat"
 	"github.com/spf13/cobra"
@@ -16,12 +18,20 @@ var evidenceCmd = &cobra.Command{
 
 var evidenceExportCmd = &cobra.Command{
 	Use:   "export [package]",
-	Short: "Export the assessment-ready evidence bundle",
+	Short: "Export the assessment-ready evidence bundle to disk",
 	Long: `Export compliance evidence for assessors and ISSMs.
 
-Real today: reads the sealed vault and ties the evidence to its actual content
-digest. Not yet implemented: the NIST 800-53 / CMMC control evaluation and the
-OSCAL bundle output are placeholder mappings.`,
+Reads the sealed vault and writes an evidence bundle to disk, derived from the
+artifact's real content digest and inventory:
+
+  <out>/<name>/evidence.json                  Caisson-native evidence document
+  <out>/<name>/oscal-assessment-results.json  OSCAL-aligned assessment results
+  <out>/<name>/evidence.md                     human-readable report
+
+The control mapping is rule-based and reflects real state (for example, the
+signing control stays "partial" until cosign signing lands). The OSCAL output is
+OSCAL-aligned, not schema-validated. This is evidence to support an assessment —
+not an ATO.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(c *cobra.Command, args []string) error {
 		path := args[0]
@@ -29,11 +39,8 @@ OSCAL bundle output are placeholder mappings.`,
 		if err != nil {
 			return err
 		}
-		bundle, err := evidence.Collect(m.Name)
-		if err != nil {
-			return err
-		}
-		dest, err := evidence.Export(bundle, evidenceOut)
+		bundle := evidence.Collect(m, time.Now().UTC())
+		written, err := evidence.Export(bundle, evidenceOut)
 		if err != nil {
 			return err
 		}
@@ -41,18 +48,29 @@ OSCAL bundle output are placeholder mappings.`,
 		note(c, "evidence export: %s\n", path)
 		note(c, "  artifact    %s v%s", m.Name, m.Version)
 		note(c, "  digest      %s", m.Digest)
-		note(c, "  frameworks  %v", bundle.Frameworks)
-		note(c, "  controls    %d mapped  (%d satisfied, %d partial, %d inherited)",
-			len(bundle.Controls), sum[evidence.Satisfied], sum[evidence.Partial], sum[evidence.Inherited])
+		note(c, "  frameworks  %s", frameworks(bundle.Frameworks))
+		note(c, "  controls    %d mapped  (%d satisfied, %d partial, %d planned, %d inherited)",
+			len(bundle.Controls), sum[evidence.Satisfied], sum[evidence.Partial], sum[evidence.Planned], sum[evidence.Inherited])
 		note(c, "")
 		note(c, "  %-8s %-10s %s", "CONTROL", "STATUS", "TITLE")
 		for _, ctrl := range bundle.Controls {
 			note(c, "  %-8s %-10s %s", ctrl.ID, ctrl.Status, ctrl.Title)
 		}
-		note(c, "\n  [not implemented] control evaluation + OSCAL bundle are placeholder mappings")
-		note(c, "  would write → %s/", dest)
+		note(c, "\n  wrote %d files:", len(written))
+		for _, w := range written {
+			note(c, "    %s", w)
+		}
+		note(c, "\n  (rule-based mapping · OSCAL-aligned, not schema-validated · not an ATO)")
 		return nil
 	},
+}
+
+func frameworks(fw []evidence.Framework) string {
+	parts := make([]string, len(fw))
+	for i, f := range fw {
+		parts[i] = string(f)
+	}
+	return joinComma(parts)
 }
 
 func init() {

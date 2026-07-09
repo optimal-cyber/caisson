@@ -72,8 +72,10 @@ go build -o caisson .
 #    are described but not yet executed.
 ./caisson deploy hello-app.caisson --evidence-export
 
-# 5. export compliance evidence (control mapping is still placeholder)
+# 5. export a real evidence bundle to disk, derived from the vault's actual
+#    digest + inventory (JSON + OSCAL-aligned + Markdown report)
 ./caisson evidence export hello-app.caisson --out ./evidence
+#   → ./evidence/hello-app/{evidence.json, oscal-assessment-results.json, evidence.md}
 
 # run caisson with no arguments for the map (and one honest promise)
 ./caisson
@@ -81,12 +83,15 @@ go build -o caisson .
 
 > `caisson deploy` is the convenience form of `caisson package deploy` — both do the same thing.
 
-**What's real vs. scaffold today:** `package create`, `package inspect`, `sbom view`, and
-the seal verification in `deploy` do real work — a `.caisson` is a standard gzip+tar you can
-open with `tar -tzf`, and `deploy` refuses a vault whose payload no longer matches its sealed
-digest. Still placeholder: cosign signing, a full dependency SBOM (Syft), NIST 800-53 / CMMC
-control evaluation, and the actual registry push / Kubernetes apply — each is clearly marked
-`[not implemented]` in its output.
+**What's real vs. scaffold today.** Real work: `package create` writes a standard gzip+tar
+`.caisson` (open it with `tar -tzf`) with a per-file SHA-256 inventory and content digest;
+`package inspect` and `sbom view` read it back; `deploy` verifies the payload digest and
+**refuses a tampered vault** (non-zero exit); and `evidence export` writes a real bundle to
+disk (native JSON, an OSCAL-aligned assessment-results file, and a Markdown report) whose
+control mapping reflects the artifact's actual state — e.g. the signing control stays
+`partial` until cosign lands. Still placeholder (clearly marked in output): cosign signing,
+a full dependency SBOM (Syft), deeper control evaluation (e.g. vulnerability scans feeding
+RA-5) and schema-validated OSCAL, and the actual registry push / Kubernetes apply.
 
 ### Test it locally
 
