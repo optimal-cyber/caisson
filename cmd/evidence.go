@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/optimal-cyber/caisson/internal/evidence"
+	"github.com/optimal-cyber/caisson/internal/pkgformat"
 	"github.com/spf13/cobra"
 )
 
@@ -18,13 +19,17 @@ var evidenceExportCmd = &cobra.Command{
 	Short: "Export the assessment-ready evidence bundle",
 	Long: `Export compliance evidence for assessors and ISSMs.
 
-Produces the assessment package from the artifact itself — the SBOM, control
-mappings, and provenance sealed inside the vault — not a parallel binder that
-drifts out of sync with what actually shipped.`,
+Real today: reads the sealed vault and ties the evidence to its actual content
+digest. Not yet implemented: the NIST 800-53 / CMMC control evaluation and the
+OSCAL bundle output are placeholder mappings.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(c *cobra.Command, args []string) error {
 		path := args[0]
-		bundle, err := evidence.Collect(path)
+		m, err := pkgformat.Open(path)
+		if err != nil {
+			return err
+		}
+		bundle, err := evidence.Collect(m.Name)
 		if err != nil {
 			return err
 		}
@@ -34,8 +39,9 @@ drifts out of sync with what actually shipped.`,
 		}
 		sum := bundle.Summary()
 		note(c, "evidence export: %s\n", path)
+		note(c, "  artifact    %s v%s", m.Name, m.Version)
+		note(c, "  digest      %s", m.Digest)
 		note(c, "  frameworks  %v", bundle.Frameworks)
-		note(c, "  generated   %s", bundle.Generated)
 		note(c, "  controls    %d mapped  (%d satisfied, %d partial, %d inherited)",
 			len(bundle.Controls), sum[evidence.Satisfied], sum[evidence.Partial], sum[evidence.Inherited])
 		note(c, "")
@@ -43,8 +49,8 @@ drifts out of sync with what actually shipped.`,
 		for _, ctrl := range bundle.Controls {
 			note(c, "  %-8s %-10s %s", ctrl.ID, ctrl.Status, ctrl.Title)
 		}
-		note(c, "\n  bundle exported → %s/  (OSCAL + human-readable, real impl)", dest)
-		note(c, "\n[scaffold] placeholder output — real evidence handling lives in internal/evidence")
+		note(c, "\n  [not implemented] control evaluation + OSCAL bundle are placeholder mappings")
+		note(c, "  would write → %s/", dest)
 		return nil
 	},
 }

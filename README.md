@@ -53,38 +53,40 @@ travel sealed with the payload.
 ## Quickstart
 
 ```bash
-# build the scaffold
+# build
 go build -o caisson .
 
-# 0. scaffold a project (writes caisson.yaml)
-./caisson init
+# 1. SEAL a directory into a real .caisson vault (writes a file to disk)
+./caisson package create ./examples/hello-app --version 1.0.0
+#   ✓ packed 5 files · per-file SHA-256 recorded · content digest computed
+#   vault → hello-app.caisson
 
-# 1. SEAL a release at the source — SBOM + control evidence computed once
-./caisson package create ./my-app
-#   ✓ resolved 4 components · SBOM sealed
-#   ✓ mapped NIST 800-53 + CMMC control evidence · attached
-#   ✓ provenance signed · vault ready → my-app.caisson
+# 2. INSPECT what a sealed vault carries (read-only)
+./caisson package inspect hello-app.caisson
 
-# 2. INSPECT what a sealed vault carries (read-only, nothing deployed)
-./caisson package inspect my-app.caisson
+# 3. read the sealed file inventory
+./caisson sbom view hello-app.caisson
 
-# 3. read the sealed SBOM
-./caisson sbom view my-app.caisson
+# 4. DEPLOY — verifies the payload digest against the sealed manifest first.
+#    A tampered vault is refused (non-zero exit); registry push + k8s apply
+#    are described but not yet executed.
+./caisson deploy hello-app.caisson --evidence-export
 
-# 4. export the assessment-ready evidence bundle
-./caisson evidence export my-app.caisson --out ./evidence
-
-# 5. DEPLOY across the gap and export evidence on arrival
-./caisson deploy my-app.caisson --evidence-export
-#   ✓ seal verified · provenance intact
-#   ✓ images pushed to airgapped registry · workloads applied
-#   ✓ evidence bundle exported → ./evidence/
+# 5. export compliance evidence (control mapping is still placeholder)
+./caisson evidence export hello-app.caisson --out ./evidence
 
 # run caisson with no arguments for the map (and one honest promise)
 ./caisson
 ```
 
 > `caisson deploy` is the convenience form of `caisson package deploy` — both do the same thing.
+
+**What's real vs. scaffold today:** `package create`, `package inspect`, `sbom view`, and
+the seal verification in `deploy` do real work — a `.caisson` is a standard gzip+tar you can
+open with `tar -tzf`, and `deploy` refuses a vault whose payload no longer matches its sealed
+digest. Still placeholder: cosign signing, a full dependency SBOM (Syft), NIST 800-53 / CMMC
+control evaluation, and the actual registry push / Kubernetes apply — each is clearly marked
+`[not implemented]` in its output.
 
 ### Test it locally
 

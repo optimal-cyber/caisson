@@ -12,29 +12,40 @@ var packageCmd = &cobra.Command{
 	Long:    "Work with the .caisson vault: seal a source tree into one, or inspect what a sealed vault carries.",
 }
 
+var (
+	createName    string
+	createVersion string
+)
+
 var packageCreateCmd = &cobra.Command{
 	Use:   "create [source]",
 	Short: "Seal a source directory into a .caisson vault",
-	Long: `Seal a release at the source.
+	Long: `Seal a directory into a Caisson vault.
 
-Resolves the application's components, builds a signed SBOM, captures its images
-and workloads, maps compliance controls, and locks everything behind a
-cryptographic seal — computed once, here, on the connected side.`,
+Packs the source tree into a gzip-compressed .caisson archive with a manifest
+recording a per-file SHA-256 inventory and an overall content digest. This is a
+real operation: it writes a vault to disk you can inspect and verify.
+
+Not yet implemented: cosign signing and a full dependency SBOM — for now the
+inventory is file-level.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(c *cobra.Command, args []string) error {
 		src := args[0]
-		pkg, err := pkgformat.Create(src)
+		m, out, err := pkgformat.Create(src, pkgformat.CreateOptions{
+			Name:    createName,
+			Version: createVersion,
+		})
 		if err != nil {
 			return err
 		}
-		note(c, "package create: sealing %q into a Caisson vault\n", src)
-		note(c, "  ✓ resolved %d components · SBOM sealed", len(pkg.Components))
-		note(c, "  ✓ captured %d images, %d workloads", len(pkg.Manifest.Images), len(pkg.Manifest.Workloads))
-		note(c, "  ✓ mapped NIST 800-53 + CMMC control evidence · attached")
-		note(c, "  ✓ provenance signed (%s) by %s", pkg.Seal.Algorithm, pkg.Seal.Signer)
-		note(c, "  ✓ seal %s", pkg.Seal.Digest)
-		note(c, "\n  vault ready → %s  (%s v%s)", pkg.Filename(), pkg.Name, pkg.Version)
-		note(c, "\n[scaffold] placeholder output — real packing lives in internal/pkgformat")
+		note(c, "package create: sealed %q\n", src)
+		note(c, "  ✓ packed %d files · %s", m.FileCount, humanSize(m.TotalSize))
+		note(c, "  ✓ per-file SHA-256 recorded · content digest computed")
+		note(c, "  ✓ manifest sealed (format %s)", m.FormatVersion)
+		note(c, "  · signing not yet implemented (signed=%t)", m.Signed)
+		note(c, "\n  vault → %s   (%s v%s)", out, m.Name, m.Version)
+		note(c, "  digest  %s", m.Digest)
+		note(c, "\n  next:  caisson package inspect %s", out)
 		return nil
 	},
 }
@@ -42,28 +53,30 @@ cryptographic seal — computed once, here, on the connected side.`,
 var packageInspectCmd = &cobra.Command{
 	Use:   "inspect [package]",
 	Short: "Show what a sealed vault carries, without deploying it",
-	Long:  "Open a .caisson vault and print its metadata, manifest, and seal — read-only, nothing is applied.",
+	Long:  "Open a .caisson vault and print its manifest — read-only, nothing is extracted or applied.",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(c *cobra.Command, args []string) error {
 		path := args[0]
-		pkg, err := pkgformat.Inspect(path)
+		m, err := pkgformat.Open(path)
 		if err != nil {
 			return err
 		}
 		note(c, "package inspect: %s\n", path)
-		note(c, "  name        %s", pkg.Name)
-		note(c, "  version     %s", pkg.Version)
-		note(c, "  created     %s", pkg.Created)
-		note(c, "  seal        %s  (%s, signed=%t)", pkg.Seal.Digest, pkg.Seal.Algorithm, pkg.Seal.Signed)
-		note(c, "  components  %d", len(pkg.Components))
-		note(c, "  images      %v", pkg.Manifest.Images)
-		note(c, "  workloads   %v", pkg.Manifest.Workloads)
+		note(c, "  name        %s", m.Name)
+		note(c, "  version     %s", m.Version)
+		note(c, "  created     %s", m.Created)
+		note(c, "  format      %s", m.FormatVersion)
+		note(c, "  source      %s", m.Source)
+		note(c, "  files       %d · %s", m.FileCount, humanSize(m.TotalSize))
+		note(c, "  signed      %t", m.Signed)
+		note(c, "  digest      %s", m.Digest)
 		note(c, "\n  next:  caisson sbom view %s   ·   caisson evidence export %s", path, path)
-		note(c, "\n[scaffold] placeholder output — real unpacking lives in internal/pkgformat")
 		return nil
 	},
 }
 
 func init() {
+	packageCreateCmd.Flags().StringVar(&createName, "name", "", "package name (default: source directory name)")
+	packageCreateCmd.Flags().StringVar(&createVersion, "version", "", "package version (default: 0.0.0)")
 	packageCmd.AddCommand(packageCreateCmd, packageInspectCmd, packageDeployCmd)
 }

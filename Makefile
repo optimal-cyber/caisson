@@ -14,13 +14,12 @@ build: ## Build the caisson binary
 run: build ## Build, then run with no args (prints the vault banner)
 	./$(BIN)
 
-demo: build ## Run every stub command end-to-end
-	@echo "== init =="        && ./$(BIN) init
-	@echo "\n== package create ==" && ./$(BIN) package create ./my-app
-	@echo "\n== package inspect ==" && ./$(BIN) package inspect my-app.caisson
-	@echo "\n== sbom view =="       && ./$(BIN) sbom view my-app.caisson
-	@echo "\n== evidence export ==" && ./$(BIN) evidence export my-app.caisson --out ./evidence
-	@echo "\n== deploy =="          && ./$(BIN) deploy my-app.caisson --evidence-export
+demo: build ## Pack the sample app into a real vault, then read it back
+	@echo "== package create (writes a real hello-app.caisson) ==" && ./$(BIN) package create ./examples/hello-app --version 1.0.0
+	@echo "\n== package inspect ==" && ./$(BIN) package inspect hello-app.caisson
+	@echo "\n== sbom view =="       && ./$(BIN) sbom view hello-app.caisson
+	@echo "\n== deploy (real seal verification) ==" && ./$(BIN) deploy hello-app.caisson --evidence-export
+	@echo "\n== evidence export ==" && ./$(BIN) evidence export hello-app.caisson --out ./evidence
 
 test: ## Run the Go tests
 	go test ./...
@@ -38,6 +37,7 @@ site: ## Serve the landing page at http://localhost:$(PORT)
 	@echo "Serving web/ at http://localhost:$(PORT)  (Ctrl-C to stop)"
 	cd web && python3 -m http.server $(PORT)
 
-clean: ## Remove build artifacts
+clean: ## Remove build artifacts and generated vaults
 	rm -f $(BIN)
+	rm -f *.caisson
 	rm -rf ./evidence
