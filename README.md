@@ -86,6 +86,23 @@ go build -o caisson .
 
 > `caisson deploy` is the convenience form of `caisson package deploy` — both do the same thing.
 
+### Test it locally
+
+Requires **Go 1.22+** (for the CLI) and **Python 3** (only to serve the static site).
+
+```bash
+make build     # build the ./caisson binary
+make run        # build + run with no args (prints the vault banner)
+make demo       # run every stub command end-to-end
+make site       # serve the landing page at http://localhost:8000
+make help       # list all targets
+```
+
+No Makefile? The equivalents are `go build -o caisson .`, `./caisson`, and
+`cd web && python3 -m http.server` (then open <http://localhost:8000>).
+Everything prints placeholder output today — nothing touches a real registry, cluster,
+or filesystem yet.
+
 ## Architecture
 
 Caisson has two halves: **seal on the connected side, verify-and-apply on the disconnected
