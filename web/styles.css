@@ -1,7 +1,7 @@
 /* ===================================================================
    Caisson landing page
-   Design tokens are lifted verbatim from brand/CHARACTER-SHEET.md so the
-   site and the mascot stay one brand. Cyan + Gold carry it; violet is a
+   Design tokens are lifted from brand/BRAND-KIT.md so the site and the
+   brand marks stay one system. Cyan + Gold carry it; violet is a
    low-opacity background wash only; ember is the warm sunset accent.
    =================================================================== */
 :root {
@@ -194,8 +194,6 @@ em { color: var(--gold-light); font-style: normal; }
 .why-foot { margin: 34px 0 0; color: var(--muted-steel); font-size: 15px; max-width: 74ch; }
 
 /* ===== MEET ===== */
-.meet { display: grid; grid-template-columns: 150px 1fr; gap: 34px; align-items: center; }
-.meet-helm { filter: drop-shadow(0 0 24px rgba(55,225,214,0.28)); }
 .meet-copy p { color: var(--muted-steel); font-size: 16px; margin: 18px 0 0; max-width: 68ch; }
 .catch { color: var(--gold-light) !important; font-weight: 700; font-size: 19px; letter-spacing: 0.01em; }
 
@@ -218,7 +216,7 @@ em { color: var(--gold-light); font-style: normal; }
   .hero-actions, .brand { justify-content: center; }
   .lede, .section-sub { margin-inline: auto; }
   .strip, .cols, .why-grid { grid-template-columns: 1fr; }
-  .meet { grid-template-columns: 1fr; text-align: center; justify-items: center; }
+  .meet { text-align: center; }
   .nav-links a:not(.nav-cta) { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {

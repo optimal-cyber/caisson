@@ -231,17 +231,14 @@ caisson/
 
 ## Meet Caisson
 
-<img src="brand/caisson-helm-logomark.svg" width="96" height="96" align="right" alt="Caisson's helm"/>
-
-Caisson is our mascot — an armored combat-engineer guardian who carries a sealed hexagonal
-vault on his back across denied territory. He learned two trades nobody else would take:
-sinking foundations under crushing pressure where ordinary builders buckle, and hauling
-live payloads across ground where the road home is already cut. He never asks what's inside
-the vault. He only guarantees it lands **sealed, signed, and standing**.
+Caisson is our mascot — a scrappy, airgap-proud otter who hauls your sealed payload into the
+disconnected dark and makes sure it lands **sealed, signed, and standing**. Offline is his
+superpower: no Wi-Fi, no problem. He never asks what's inside the vault — he only guarantees
+that nothing crosses the gap unsealed.
 
 > **"Nothing crosses the gap unsealed."**
 
-The full character sheet, palette, and art live in [`brand/`](brand/).
+Brand marks, mascot art, and the palette live in [`brand/`](brand/) — see [`BRAND-KIT.md`](brand/BRAND-KIT.md).
 
 ---
 
