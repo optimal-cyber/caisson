@@ -22,6 +22,7 @@ var (
 	deployNamespace   string
 	deployKubeContext string
 	deployKubectl     string
+	deployHelm        string
 )
 
 // deployCmd is the top-level convenience form: `caisson deploy my-app.caisson`.
@@ -108,9 +109,13 @@ func runDeploy(c *cobra.Command, args []string) error {
 	if fail := policyGate(c, m, sr); fail != nil {
 		return fail
 	}
-	note(c, "  · found %d kubernetes manifest(s) in payload", len(workloads))
-	for _, w := range workloads {
-		note(c, "      - %s", w)
+	if m.Chart != "" {
+		note(c, "  · Helm chart in payload: %s (release %q)", m.Chart, m.Release)
+	} else {
+		note(c, "  · found %d kubernetes manifest(s) in payload", len(workloads))
+		for _, w := range workloads {
+			note(c, "      - %s", w)
+		}
 	}
 	var pulled, declared []string
 	for _, img := range m.Images {
@@ -132,7 +137,11 @@ func runDeploy(c *cobra.Command, args []string) error {
 		if len(pulled) > 0 {
 			note(c, "  · would push %d image(s) to %s", len(pulled), target.Registry)
 		}
-		note(c, "  · would apply %d workload(s) to %s/%s via kubectl", len(workloads), target.Cluster, target.Namespace)
+		if m.Chart != "" {
+			note(c, "  · would install Helm chart %s as release %q into %s/%s via helm", m.Chart, m.Release, target.Cluster, target.Namespace)
+		} else {
+			note(c, "  · would apply %d workload(s) to %s/%s via kubectl", len(workloads), target.Cluster, target.Namespace)
+		}
 		if evidenceExport {
 			note(c, "  · would export the evidence bundle on arrival")
 		}
@@ -165,7 +174,21 @@ func applyDelivery(c *cobra.Command, path string, m *pkgformat.Manifest, target 
 		note(c, "  · skipping image push — images are declared-only (re-create with --pull-images)")
 	}
 
-	if len(workloads) > 0 {
+	switch {
+	case m.Chart != "":
+		out, err := deploy.ApplyChart(path, m.Chart, m.Release, deploy.ApplyOptions{
+			Namespace:   target.Namespace,
+			KubeContext: deployKubeContext,
+			Helm:        deployHelm,
+		})
+		for _, line := range splitLines(out) {
+			note(c, "      %s", line)
+		}
+		if err != nil {
+			return err
+		}
+		note(c, "  ✓ installed Helm release %q into namespace %q via helm", m.Release, target.Namespace)
+	case len(workloads) > 0:
 		out, err := deploy.ApplyWorkloads(path, workloads, deploy.ApplyOptions{
 			Namespace:   target.Namespace,
 			KubeContext: deployKubeContext,
@@ -268,5 +291,6 @@ func init() {
 		cmd.Flags().StringVar(&deployNamespace, "namespace", "", "Kubernetes namespace to apply workloads into")
 		cmd.Flags().StringVar(&deployKubeContext, "kube-context", "", "kubectl context to apply workloads with")
 		cmd.Flags().StringVar(&deployKubectl, "kubectl", "kubectl", "kubectl binary to invoke")
+		cmd.Flags().StringVar(&deployHelm, "helm", "helm", "helm binary to invoke (when the vault carries a Helm chart)")
 	}
 }

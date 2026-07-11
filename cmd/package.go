@@ -58,6 +58,7 @@ func runPackageCreate(c *cobra.Command, args []string) error {
 	// Effective settings: the spec supplies defaults, flags override.
 	name, version, keyPath := createName, createVersion, createKey
 	var frameworks, images, workloads []string
+	var chart, release string
 	if sp != nil {
 		if name == "" {
 			name = sp.Name
@@ -69,6 +70,10 @@ func runPackageCreate(c *cobra.Command, args []string) error {
 			keyPath = sp.ResolvedKey()
 		}
 		frameworks, images, workloads = sp.Frameworks, sp.Images, sp.Manifests
+		chart, release = sp.Helm.Chart, sp.Helm.Release
+	}
+	if chart != "" && release == "" {
+		release = name
 	}
 
 	// Source: a positional arg wins, then the spec's source, else it's an error.
@@ -148,6 +153,8 @@ func runPackageCreate(c *cobra.Command, args []string) error {
 		Frameworks:     frameworks,
 		Images:         images,
 		Workloads:      workloads,
+		Chart:          chart,
+		Release:        release,
 		Syft:           createSyft,
 		ImageLayoutDir: layoutDir,
 		PulledDigests:  pulledDigests,

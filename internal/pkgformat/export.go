@@ -1,9 +1,15 @@
 package pkgformat
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 // ExtractedAttestation is one DSSE attestation lifted out of a vault, ready to
@@ -54,4 +60,62 @@ func SignerPublicKeyPEM(path string) ([]byte, bool, error) {
 		return nil, false, err
 	}
 	return pemBytes, true, nil
+}
+
+// ExtractPayloadTree extracts every payload file at or under prefix (a directory
+// path relative to the sealed source) into destDir, preserving structure. It
+// returns the number of files written — 0 means the subtree isn't in the vault.
+// Used by deploy to hand a sealed Helm chart to `helm`.
+func ExtractPayloadTree(vaultPath, destDir, prefix string) (int, error) {
+	prefix = strings.Trim(filepath.ToSlash(prefix), "/")
+
+	f, err := os.Open(vaultPath)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return 0, err
+	}
+	defer gz.Close()
+
+	n := 0
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return n, err
+		}
+		if !strings.HasPrefix(hdr.Name, payloadPrefix) || hdr.Typeflag != tar.TypeReg {
+			continue
+		}
+		rel := strings.TrimPrefix(hdr.Name, payloadPrefix)
+		if rel != prefix && !strings.HasPrefix(rel, prefix+"/") {
+			continue
+		}
+		out := filepath.Join(destDir, filepath.FromSlash(rel))
+		if !strings.HasPrefix(out, filepath.Clean(destDir)+string(os.PathSeparator)) {
+			return n, fmt.Errorf("pkgformat: unsafe payload path %q", hdr.Name)
+		}
+		if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+			return n, err
+		}
+		w, err := os.Create(out)
+		if err != nil {
+			return n, err
+		}
+		if _, err := io.Copy(w, tr); err != nil {
+			w.Close()
+			return n, err
+		}
+		if err := w.Close(); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
 }

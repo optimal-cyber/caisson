@@ -31,6 +31,16 @@ type Signing struct {
 	Key string `yaml:"key,omitempty"`
 }
 
+// Helm declares a Helm chart carried in the source, applied with `helm upgrade
+// --install` on the disconnected side instead of raw kubectl manifests.
+type Helm struct {
+	// Chart is a path (relative to source) to the chart directory, sealed in
+	// the vault's payload.
+	Chart string `yaml:"chart,omitempty"`
+	// Release is the Helm release name; defaults to the package name.
+	Release string `yaml:"release,omitempty"`
+}
+
 // Spec is a parsed caisson.yaml.
 type Spec struct {
 	Name       string   `yaml:"name"`
@@ -40,6 +50,7 @@ type Spec struct {
 	Manifests  []string `yaml:"manifests,omitempty"`
 	Frameworks []string `yaml:"frameworks,omitempty"`
 	Signing    Signing  `yaml:"signing,omitempty"`
+	Helm       Helm     `yaml:"helm,omitempty"`
 
 	// dir is the directory the spec was loaded from; relative paths resolve
 	// against it. Set by Load/LoadFile, not by YAML.

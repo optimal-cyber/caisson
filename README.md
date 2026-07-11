@@ -151,12 +151,13 @@ signed, `CM-8`/`SA-12` cite the real SBOM component count, and `RA-5` flips to *
 once a scan is attached, and the OSCAL assessment-results file is **validated against NIST's
 published OSCAL 1.1.2 schema** (bundled, offline) before it's written; and `deploy --apply`
 performs the real delivery — pushing the sealed images to the target registry
-(go-containerregistry) and applying the workloads with `kubectl` — behind the seal, signature,
-and policy gate, needing a reachable registry and cluster with credentials (without `--apply` it
-prints the plan). Out of scope **by design** (not a TODO): Sigstore **keyless** signing
-(Fulcio/Rekor need an online identity provider + transparency log, which the airgap forbids) —
-Caisson stays key-based so signing and verification both work disconnected, while the envelopes
-remain cosign-verifiable. Still placeholder (clearly marked in output): Helm-based applies.
+(go-containerregistry) and applying the workloads with `kubectl`, or installing a sealed
+**Helm chart** with `helm upgrade --install` when the vault carries one — behind the seal,
+signature, and policy gate, needing a reachable registry and cluster with credentials (without
+`--apply` it prints the plan). Out of scope **by design** (not a TODO): Sigstore **keyless**
+signing (Fulcio/Rekor need an online identity provider + transparency log, which the airgap
+forbids) — Caisson stays key-based so signing and verification both work disconnected, while the
+envelopes remain cosign-verifiable.
 
 ### Test it locally
 

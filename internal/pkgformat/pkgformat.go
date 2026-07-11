@@ -106,6 +106,8 @@ type Manifest struct {
 	Frameworks    []string    `json:"frameworks,omitempty"`
 	Images        []ImageRef  `json:"images,omitempty"`
 	Workloads     []string    `json:"workloads,omitempty"`
+	Chart         string      `json:"chart,omitempty"`   // Helm chart path (relative to source) to apply
+	Release       string      `json:"release,omitempty"` // Helm release name
 	SBOM          *SBOMRef    `json:"sbom,omitempty"`
 	Scan          *ScanRef    `json:"scan,omitempty"`
 	Files         []FileEntry `json:"files"`
@@ -133,6 +135,8 @@ type CreateOptions struct {
 	Frameworks []string     // compliance frameworks the evidence is asserted to map to
 	Images     []string     // container image references the workload declares
 	Workloads  []string     // k8s manifest paths (relative to source) to apply on arrival
+	Chart      string       // Helm chart path (relative to source) to apply on arrival
+	Release    string       // Helm release name
 	Syft       bool         // generate the SBOM with Anchore Syft (deep) instead of native detection
 
 	// ImageLayoutDir, when set, is a directory holding an OCI image layout to
@@ -209,6 +213,8 @@ func Create(source string, opts CreateOptions) (*Manifest, string, error) {
 		Frameworks:    opts.Frameworks,
 		Images:        buildImageRefs(opts.Images, opts.PulledDigests),
 		Workloads:     opts.Workloads,
+		Chart:         opts.Chart,
+		Release:       opts.Release,
 		SBOM: &SBOMRef{
 			Format:      sbomResult.Format,
 			SpecVersion: sbomResult.SpecVersion,

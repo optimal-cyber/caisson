@@ -17,6 +17,12 @@ manifests:
   - k8s/deployment.yaml
   - k8s/service.yaml
 
+# Optional: a Helm chart carried in the payload. When set, `deploy --apply`
+# installs it with `helm upgrade --install` instead of applying raw manifests.
+helm:
+  chart: chart
+  release: hello-app
+
 # Compliance frameworks the sealed evidence is asserted to map to.
 frameworks:
   - NIST SP 800-53 Rev 5

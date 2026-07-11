@@ -122,9 +122,10 @@ caisson deploy hello-app.caisson --require-signature --apply \
 ```
 
 With `--apply`, Caisson pushes the sealed images to your registry (via go-containerregistry) and
-applies the workloads with `kubectl`, wrapping the tools you already run. This needs a **reachable
-registry and Kubernetes cluster with credentials**; `--evidence-export` also writes the
-assessment-ready evidence bundle on arrival.
+applies the workloads with `kubectl` — or, when the `caisson.yaml` declares a `helm:` chart
+carried in the payload, installs it with `helm upgrade --install` — wrapping the tools you already
+run. This needs a **reachable registry and Kubernetes cluster with credentials**;
+`--evidence-export` also writes the assessment-ready evidence bundle on arrival.
 
 ---
 
