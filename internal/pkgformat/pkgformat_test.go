@@ -141,6 +141,43 @@ func TestUnsignedVaultReportsNoSignature(t *testing.T) {
 	}
 }
 
+func TestCreateRecordsFrameworksAndImages(t *testing.T) {
+	src := t.TempDir()
+	writeTmp(t, src, "app/server.py", "print('hi')\n")
+	defer inDir(t, t.TempDir())()
+
+	_, out, err := Create(src, CreateOptions{
+		Name:       "demo",
+		Version:    "1.0.0",
+		Frameworks: []string{"NIST SP 800-53 Rev 5", "CMMC 2.0 Level 2"},
+		Images:     []string{"registry.airgap.local:5000/demo:1.0.0"},
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	m, err := Open(out)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if len(m.Frameworks) != 2 || m.Frameworks[0] != "NIST SP 800-53 Rev 5" {
+		t.Errorf("frameworks not sealed: %v", m.Frameworks)
+	}
+	if len(m.Images) != 1 {
+		t.Fatalf("images not sealed: %v", m.Images)
+	}
+	if img := m.Images[0]; img.Reference != "registry.airgap.local:5000/demo:1.0.0" || img.Pulled {
+		t.Errorf("declared image wrong: %+v", img)
+	}
+
+	// Frameworks and images ride inside the signed manifest, so the seal must
+	// still verify.
+	ok, _, err := Verify(out)
+	if err != nil || !ok {
+		t.Errorf("Verify ok=%t err=%v after recording frameworks/images", ok, err)
+	}
+}
+
 func writeTmp(t *testing.T, root, rel, content string) {
 	t.Helper()
 	p := filepath.Join(root, filepath.FromSlash(rel))

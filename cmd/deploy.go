@@ -5,6 +5,7 @@ import (
 
 	"github.com/optimal-cyber/caisson/internal/deploy"
 	"github.com/optimal-cyber/caisson/internal/pkgformat"
+	"github.com/optimal-cyber/caisson/internal/spec"
 	"github.com/optimal-cyber/caisson/internal/vuln"
 	"github.com/spf13/cobra"
 )
@@ -51,11 +52,17 @@ func runDeploy(c *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Heuristic: treat sealed *.yaml/*.yml as Kubernetes workloads to apply.
+	// Prefer the workloads the caisson.yaml declared; otherwise fall back to
+	// treating sealed *.yaml/*.yml as Kubernetes manifests (excluding the
+	// caisson.yaml itself, which is project config, not a workload).
 	var workloads []string
-	for _, f := range m.Files {
-		if f.Type == "k8s-manifest" {
-			workloads = append(workloads, f.Path)
+	if len(m.Workloads) > 0 {
+		workloads = m.Workloads
+	} else {
+		for _, f := range m.Files {
+			if f.Type == "k8s-manifest" && f.Path != spec.FileName {
+				workloads = append(workloads, f.Path)
+			}
 		}
 	}
 	target := deploy.DefaultTarget()

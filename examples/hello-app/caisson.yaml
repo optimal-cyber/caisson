@@ -1,0 +1,28 @@
+# caisson.yaml — declarative package definition for a Caisson vault.
+# `caisson package create` reads this file; command-line flags override it.
+
+name: hello-app
+version: 1.0.0
+
+# Directory sealed into the vault (relative to this file).
+source: .
+
+# Container images the workload references. Declared here now; pulled into
+# an OCI layout inside the vault when image support is run with registry access.
+images:
+  - registry.airgap.local:5000/hello-app:1.0.0
+
+# Kubernetes manifests applied on the disconnected side (relative to source).
+manifests:
+  - k8s/deployment.yaml
+  - k8s/service.yaml
+
+# Compliance frameworks the sealed evidence is asserted to map to.
+frameworks:
+  - NIST SP 800-53 Rev 5
+  - CMMC 2.0 Level 2
+
+# Signing identity. Generate a key with `caisson key gen --out caisson`,
+# then point `key` at the private PEM (kept out of version control).
+signing:
+  key: caisson.key

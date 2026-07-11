@@ -16,7 +16,8 @@ run: build ## Build, then run with no args (prints the vault banner)
 
 demo: build ## Generate a key, sign+pack the sample app, verify, and read it back
 	@echo "== key gen ==" && ./$(BIN) key gen --out caisson-demo
-	@echo "\n== package create (signed + scan) ==" && ./$(BIN) package create ./examples/hello-app --version 1.0.0 --key caisson-demo.key --scan-report examples/hello-app-scan.grype.json
+	@echo "\n== init (scaffold a caisson.yaml) ==" && rm -rf .demo-init && mkdir -p .demo-init && (cd .demo-init && ../$(BIN) init --name demo-svc) && echo "\n--- generated caisson.yaml ---" && cat .demo-init/caisson.yaml && rm -rf .demo-init
+	@echo "\n== package create (reads examples/hello-app/caisson.yaml; --key overrides it) ==" && ./$(BIN) package create ./examples/hello-app --key caisson-demo.key --scan-report examples/hello-app-scan.grype.json
 	@echo "\n== verify (seal + signature + SLSA provenance) ==" && ./$(BIN) verify hello-app.caisson --key caisson-demo.pub
 	@echo "\n== package inspect ==" && ./$(BIN) package inspect hello-app.caisson
 	@echo "\n== sbom view (real CycloneDX) ==" && ./$(BIN) sbom view hello-app.caisson
@@ -45,3 +46,4 @@ clean: ## Remove build artifacts, generated vaults, keys, and evidence
 	rm -f *.caisson
 	rm -f *.key *.pub
 	rm -rf ./evidence
+	rm -rf .demo-init

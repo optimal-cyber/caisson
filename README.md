@@ -60,10 +60,20 @@ go build -o caisson .
 ./caisson key gen --out caisson
 #   private → caisson.key   public → caisson.pub
 
+# 0b. (optional) scaffold a caisson.yaml — the declarative package definition
+#     (name, version, source, images, k8s manifests, frameworks, signing key).
+#     package create reads it when present; flags override individual fields.
+./caisson init --name hello-app
+#   → writes ./caisson.yaml   (edit to taste, then `caisson package create`)
+
 # 1. SEAL a directory into a real .caisson vault (writes a file to disk).
 #    With --key, the vault is Ed25519-signed and gets a SLSA provenance attestation.
-./caisson package create ./examples/hello-app --version 1.0.0 --key caisson.key
-#   ✓ packed 5 files · content digest computed
+#    examples/hello-app ships a caisson.yaml, so name/version/images/frameworks
+#    come from it — flags (like --key here) still override.
+./caisson package create ./examples/hello-app --key caisson.key
+#   ✓ read examples/hello-app/caisson.yaml
+#   ✓ packed 7 files · content digest computed
+#   ✓ frameworks mapped: NIST SP 800-53 Rev 5, CMMC 2.0 Level 2
 #   ✓ signed (ed25519) · SLSA provenance attested
 #   vault → hello-app.caisson
 
@@ -98,7 +108,10 @@ go build -o caisson .
 
 > `caisson deploy` is the convenience form of `caisson package deploy` — both do the same thing.
 
-**What's real vs. scaffold today.** Real work: `package create` writes a standard gzip+tar
+**What's real vs. scaffold today.** Real work: `caisson init` writes a real `caisson.yaml`
+(name, version, source, images, k8s manifests, frameworks, signing key) and `package create`
+reads it when present, with flags overriding individual fields; `package create` writes a
+standard gzip+tar
 `.caisson` (open it with `tar -tzf`) with a per-file SHA-256 inventory and content digest, an
 embedded **CycloneDX 1.6 SBOM** (dependencies detected from go.mod / package.json /
 requirements.txt / Dockerfile), and — with `--key` — an **Ed25519 signature** plus
@@ -185,6 +198,7 @@ caisson/
 ├── cmd/                        # cobra commands (thin; render only)
 │   ├── root.go  init.go  package.go  deploy.go  sbom.go  evidence.go
 └── internal/
+    ├── spec/                   # caisson.yaml: parse the package definition + scaffold init
     ├── pkgformat/              # the .caisson vault format: pack, inspect, seal, SBOM
     ├── evidence/               # NIST 800-53 / CMMC control mapping + bundle export
     ├── deploy/                 # verify seal → OCI registry push → k8s apply → evidence

@@ -78,6 +78,17 @@ type ScanRef struct {
 	Counts map[string]int `json:"counts"`
 }
 
+// ImageRef records a container image the workload references. At create time a
+// vault records the declared reference (Pulled=false); pulling the image into
+// an OCI layout inside the vault fills in Digest and Path (needs registry
+// access).
+type ImageRef struct {
+	Reference string `json:"reference"`
+	Digest    string `json:"digest,omitempty"`
+	Path      string `json:"path,omitempty"`
+	Pulled    bool   `json:"pulled"`
+}
+
 // Manifest is the sealed metadata carried inside every vault (manifest.json).
 type Manifest struct {
 	FormatVersion string      `json:"formatVersion"`
@@ -89,6 +100,9 @@ type Manifest struct {
 	TotalSize     int64       `json:"totalSize"`
 	Digest        string      `json:"digest"`
 	Signed        bool        `json:"signed"`
+	Frameworks    []string    `json:"frameworks,omitempty"`
+	Images        []ImageRef  `json:"images,omitempty"`
+	Workloads     []string    `json:"workloads,omitempty"`
 	SBOM          *SBOMRef    `json:"sbom,omitempty"`
 	Scan          *ScanRef    `json:"scan,omitempty"`
 	Files         []FileEntry `json:"files"`
@@ -108,11 +122,14 @@ type Signature struct {
 
 // CreateOptions configures Create.
 type CreateOptions struct {
-	Name    string       // defaults to the source directory's base name
-	Version string       // defaults to "0.0.0"
-	Now     time.Time    // defaults to time.Now().UTC(); injectable for tests
-	Signer  *signing.Key // when set, the vault is signed and attestations are added
-	Scan    *vuln.Report // when set, the scan is embedded and (if signing) attested
+	Name       string       // defaults to the source directory's base name
+	Version    string       // defaults to "0.0.0"
+	Now        time.Time    // defaults to time.Now().UTC(); injectable for tests
+	Signer     *signing.Key // when set, the vault is signed and attestations are added
+	Scan       *vuln.Report // when set, the scan is embedded and (if signing) attested
+	Frameworks []string     // compliance frameworks the evidence is asserted to map to
+	Images     []string     // container image references the workload declares
+	Workloads  []string     // k8s manifest paths (relative to source) to apply on arrival
 }
 
 // Create packs source (a directory) into "<name>.caisson" in the current
@@ -181,6 +198,9 @@ func Create(source string, opts CreateOptions) (*Manifest, string, error) {
 		TotalSize:     total,
 		Digest:        digestOf(files),
 		Signed:        opts.Signer != nil,
+		Frameworks:    opts.Frameworks,
+		Images:        declaredImages(opts.Images),
+		Workloads:     opts.Workloads,
 		SBOM: &SBOMRef{
 			Format:      sbom.Format,
 			SpecVersion: sbom.SpecVersion,
@@ -337,6 +357,20 @@ func hashFile(path string) (string, int64, error) {
 		return "", 0, err
 	}
 	return hex.EncodeToString(h.Sum(nil)), n, nil
+}
+
+// declaredImages records the workload's declared image references as unpulled
+// ImageRefs. Pulling them into the vault's OCI layout (which fills in Digest and
+// Path) needs registry access and happens separately.
+func declaredImages(refs []string) []ImageRef {
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]ImageRef, 0, len(refs))
+	for _, r := range refs {
+		out = append(out, ImageRef{Reference: r, Pulled: false})
+	}
+	return out
 }
 
 // digestOf computes the overall content digest: sha256 over the sorted
