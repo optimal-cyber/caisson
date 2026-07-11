@@ -52,6 +52,9 @@ travel sealed with the payload.
 
 ## Quickstart
 
+> **Deploying for real?** See **[DEPLOYING.md](DEPLOYING.md)** — the concise seal → carry →
+> deploy guide with real sample output and the policy-gate flags.
+
 ```bash
 # build
 go build -o caisson .
