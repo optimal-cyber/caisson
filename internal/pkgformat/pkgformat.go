@@ -655,6 +655,84 @@ func verifyImages(vaultPath string, wantDigests []string) (bool, error) {
 	return true, nil
 }
 
+// ExtractImageLayout writes the vault's sealed OCI image layout into destDir
+// (which becomes the layout root) and reports whether any layout was present.
+// Used by deploy to push the sealed images to a registry on the far side.
+func ExtractImageLayout(vaultPath, destDir string) (bool, error) {
+	return extractLayout(vaultPath, destDir)
+}
+
+// ExtractPayloadFiles extracts the named payload files (paths relative to the
+// sealed source) into destDir, returning their on-disk paths in the same order.
+// It errors if any requested file is not present in the vault. Used by deploy to
+// hand Kubernetes manifests to kubectl.
+func ExtractPayloadFiles(vaultPath, destDir string, relPaths []string) ([]string, error) {
+	want := make(map[string]bool, len(relPaths))
+	for _, r := range relPaths {
+		want[filepath.ToSlash(r)] = true
+	}
+
+	f, err := os.Open(vaultPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return nil, err
+	}
+	defer gz.Close()
+
+	found := map[string]string{}
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if !strings.HasPrefix(hdr.Name, payloadPrefix) || hdr.Typeflag != tar.TypeReg {
+			continue
+		}
+		rel := strings.TrimPrefix(hdr.Name, payloadPrefix)
+		if !want[rel] {
+			continue
+		}
+		out := filepath.Join(destDir, filepath.FromSlash(rel))
+		if !strings.HasPrefix(out, filepath.Clean(destDir)+string(os.PathSeparator)) {
+			return nil, fmt.Errorf("pkgformat: unsafe payload path %q", hdr.Name)
+		}
+		if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+			return nil, err
+		}
+		w, err := os.Create(out)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := io.Copy(w, tr); err != nil {
+			w.Close()
+			return nil, err
+		}
+		if err := w.Close(); err != nil {
+			return nil, err
+		}
+		found[rel] = out
+	}
+
+	paths := make([]string, 0, len(relPaths))
+	for _, r := range relPaths {
+		rel := filepath.ToSlash(r)
+		p, ok := found[rel]
+		if !ok {
+			return nil, fmt.Errorf("pkgformat: %q not found in vault payload", r)
+		}
+		paths = append(paths, p)
+	}
+	return paths, nil
+}
+
 // extractLayout writes every images/ member of the vault into destDir (stripping
 // the images/ prefix so destDir is the layout root). It reports whether any
 // layout file was present.

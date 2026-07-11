@@ -120,6 +120,81 @@ func WriteLayout(dir string, images map[string]v1.Image) ([]Pulled, error) {
 	return out, nil
 }
 
+// pushTimeout bounds a PushLayout's total registry interaction.
+const pushTimeout = 5 * time.Minute
+
+// Pushed records one image copied from the sealed layout to a target registry.
+type Pushed struct {
+	From string // the reference recorded in the layout
+	To   string // the reference it was pushed to
+}
+
+// RewriteRegistry returns ref with its registry host replaced by newRegistry,
+// preserving the repository path and the tag or digest. It is pure and needs no
+// network, so the mapping is unit-tested offline.
+func RewriteRegistry(ref, newRegistry string) (string, error) {
+	r, err := name.ParseReference(ref)
+	if err != nil {
+		return "", fmt.Errorf("oci: parsing reference %q: %w", ref, err)
+	}
+	repo := newRegistry + "/" + r.Context().RepositoryStr()
+	if _, ok := r.(name.Digest); ok {
+		return repo + "@" + r.Identifier(), nil
+	}
+	return repo + ":" + r.Identifier(), nil
+}
+
+// PushLayout pushes every image in the OCI layout at dir to targetRegistry,
+// rewriting each image's registry host but keeping its repository and tag. This
+// is the real push path: it needs network access and credentials for
+// targetRegistry, bounded by pushTimeout. Auth comes from the ambient Docker
+// keychain.
+func PushLayout(dir, targetRegistry string) ([]Pushed, error) {
+	p, err := layout.FromPath(dir)
+	if err != nil {
+		return nil, fmt.Errorf("oci: opening layout at %s: %w", dir, err)
+	}
+	idx, err := p.ImageIndex()
+	if err != nil {
+		return nil, fmt.Errorf("oci: reading image index: %w", err)
+	}
+	manifest, err := idx.IndexManifest()
+	if err != nil {
+		return nil, fmt.Errorf("oci: reading index manifest: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), pushTimeout)
+	defer cancel()
+
+	var out []Pushed
+	for _, desc := range manifest.Manifests {
+		from := desc.Annotations[refAnnotation]
+		if from == "" {
+			return nil, fmt.Errorf("oci: layout entry %s has no source reference annotation", desc.Digest)
+		}
+		to, err := RewriteRegistry(from, targetRegistry)
+		if err != nil {
+			return nil, err
+		}
+		dst, err := name.ParseReference(to)
+		if err != nil {
+			return nil, fmt.Errorf("oci: parsing target reference %q: %w", to, err)
+		}
+		img, err := idx.Image(desc.Digest)
+		if err != nil {
+			return nil, fmt.Errorf("oci: loading image %s: %w", desc.Digest, err)
+		}
+		if err := remote.Write(dst, img,
+			remote.WithAuthFromKeychain(authn.DefaultKeychain),
+			remote.WithContext(ctx),
+		); err != nil {
+			return nil, fmt.Errorf("oci: pushing %s → %s (needs registry access): %w", from, to, err)
+		}
+		out = append(out, Pushed{From: from, To: to})
+	}
+	return out, nil
+}
+
 // VerifyLayout opens the OCI layout at dir and confirms every digest in
 // wantDigests resolves to an image whose manifest, config, and layer blobs all
 // re-hash to their recorded digests. Because OCI is content-addressed, a

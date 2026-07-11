@@ -309,6 +309,40 @@ func TestVerifyFailsWhenPulledImageLayoutMissing(t *testing.T) {
 
 const zeroDigest = "0000000000000000000000000000000000000000000000000000000000000000"
 
+func TestExtractPayloadFiles(t *testing.T) {
+	src := t.TempDir()
+	writeTmp(t, src, "k8s/deployment.yaml", "kind: Deployment\n")
+	writeTmp(t, src, "k8s/service.yaml", "kind: Service\n")
+	writeTmp(t, src, "app/server.py", "print('hi')\n")
+
+	defer inDir(t, t.TempDir())()
+	_, out, err := Create(src, CreateOptions{Name: "demo", Version: "1.0.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dest := t.TempDir()
+	paths, err := ExtractPayloadFiles(out, dest, []string{"k8s/deployment.yaml", "k8s/service.yaml"})
+	if err != nil {
+		t.Fatalf("ExtractPayloadFiles: %v", err)
+	}
+	if len(paths) != 2 {
+		t.Fatalf("got %d paths, want 2", len(paths))
+	}
+	got, err := os.ReadFile(paths[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "kind: Deployment\n" {
+		t.Errorf("extracted content = %q", got)
+	}
+
+	// A file not in the payload is an error.
+	if _, err := ExtractPayloadFiles(out, dest, []string{"k8s/missing.yaml"}); err == nil {
+		t.Error("expected an error extracting a file not in the payload")
+	}
+}
+
 func writeTmp(t *testing.T, root, rel, content string) {
 	t.Helper()
 	p := filepath.Join(root, filepath.FromSlash(rel))

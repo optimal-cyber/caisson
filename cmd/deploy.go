@@ -2,8 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/optimal-cyber/caisson/internal/deploy"
+	"github.com/optimal-cyber/caisson/internal/evidence"
 	"github.com/optimal-cyber/caisson/internal/pkgformat"
 	"github.com/optimal-cyber/caisson/internal/spec"
 	"github.com/optimal-cyber/caisson/internal/vuln"
@@ -11,9 +14,14 @@ import (
 )
 
 var (
-	evidenceExport   bool
-	denySeverity     string
-	requireSignature bool
+	evidenceExport    bool
+	denySeverity      string
+	requireSignature  bool
+	applyDeploy       bool
+	deployRegistry    string
+	deployNamespace   string
+	deployKubeContext string
+	deployKubectl     string
 )
 
 // deployCmd is the top-level convenience form: `caisson deploy my-app.caisson`.
@@ -23,10 +31,13 @@ var deployCmd = &cobra.Command{
 	Short: "Carry a sealed vault across the airgap and apply it",
 	Long: `Deploy a sealed vault into denied territory.
 
-Real today: opens the vault and verifies the payload digest against the sealed
-manifest (a tamper check) before doing anything. Not yet implemented: pushing
-images to an OCI registry and applying workloads to Kubernetes are described but
-not executed. Caisson wraps the registry and cluster you already run.`,
+Always verifies the seal (payload + embedded image layout) and signature and runs
+the policy gate first; a tampered, badly-signed, or policy-violating vault is
+refused before anything is delivered. Without --apply it prints the delivery
+plan. With --apply it executes the delivery: pushes the sealed images to the
+target registry (go-containerregistry) and applies the workloads with kubectl —
+which needs a reachable registry and cluster with credentials. Caisson wraps the
+registry and cluster you already run rather than replacing them.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runDeploy,
 }
@@ -66,6 +77,12 @@ func runDeploy(c *cobra.Command, args []string) error {
 		}
 	}
 	target := deploy.DefaultTarget()
+	if deployRegistry != "" {
+		target.Registry = deployRegistry
+	}
+	if deployNamespace != "" {
+		target.Namespace = deployNamespace
+	}
 
 	note(c, "deploy: %s → %s / %s\n", path, target.Cluster, target.Namespace)
 	if !ok {
@@ -104,20 +121,83 @@ func runDeploy(c *cobra.Command, args []string) error {
 		}
 	}
 	if len(pulled) > 0 {
-		note(c, "  · %d image(s) sealed in the vault's OCI layout (verified with the seal):", len(pulled))
-		for _, r := range pulled {
-			note(c, "      - %s", r)
-		}
+		note(c, "  · %d image(s) sealed in the vault's OCI layout (verified with the seal)", len(pulled))
 	}
 	if len(declared) > 0 {
-		note(c, "  · %d image(s) declared but not sealed (re-run create --pull-images with registry access)", len(declared))
+		note(c, "  · %d image(s) declared but not sealed (re-create with --pull-images to deliver them)", len(declared))
 	}
-	note(c, "\n  [not implemented] would push images to %s", target.Registry)
-	note(c, "  [not implemented] would apply %d workload(s) to cluster %q", len(workloads), target.Cluster)
-	if evidenceExport {
-		note(c, "  [not implemented] would export the evidence bundle on arrival")
+
+	if !applyDeploy {
+		note(c, "\n  dry run — pass --apply to execute (needs a reachable registry + cluster):")
+		if len(pulled) > 0 {
+			note(c, "  · would push %d image(s) to %s", len(pulled), target.Registry)
+		}
+		note(c, "  · would apply %d workload(s) to %s/%s via kubectl", len(workloads), target.Cluster, target.Namespace)
+		if evidenceExport {
+			note(c, "  · would export the evidence bundle on arrival")
+		}
+		return nil
+	}
+
+	// --apply: real delivery. The seal, signature, and policy gate above have
+	// already passed, so we only reach here for a vault cleared to land.
+	note(c, "\n  --apply: delivering (needs registry + cluster access)…")
+	if err := applyDelivery(c, path, m, target, pulled, declared, workloads); err != nil {
+		return err
 	}
 	return nil
+}
+
+// applyDelivery performs the real, guarded delivery: push the sealed images to
+// the target registry, apply the workloads with kubectl, and (optionally) write
+// the evidence bundle on arrival.
+func applyDelivery(c *cobra.Command, path string, m *pkgformat.Manifest, target deploy.Target, pulled, declared, workloads []string) error {
+	switch {
+	case len(pulled) > 0:
+		pushed, err := deploy.PushImages(path, target.Registry)
+		if err != nil {
+			return err
+		}
+		for _, p := range pushed {
+			note(c, "  ✓ pushed %s → %s", p.From, p.To)
+		}
+	case len(declared) > 0:
+		note(c, "  · skipping image push — images are declared-only (re-create with --pull-images)")
+	}
+
+	if len(workloads) > 0 {
+		out, err := deploy.ApplyWorkloads(path, workloads, deploy.ApplyOptions{
+			Namespace:   target.Namespace,
+			KubeContext: deployKubeContext,
+			Kubectl:     deployKubectl,
+		})
+		for _, line := range splitLines(out) {
+			note(c, "      %s", line)
+		}
+		if err != nil {
+			return err
+		}
+		note(c, "  ✓ applied %d workload(s) to namespace %q via kubectl", len(workloads), target.Namespace)
+	}
+
+	if evidenceExport {
+		bundle := evidence.Collect(m, time.Now().UTC())
+		written, err := evidence.Export(bundle, "./evidence")
+		if err != nil {
+			return err
+		}
+		note(c, "  ✓ exported evidence bundle on arrival (%d files under ./evidence)", len(written))
+	}
+	return nil
+}
+
+// splitLines splits kubectl output into non-empty display lines.
+func splitLines(s string) []string {
+	s = strings.TrimRight(s, "\n")
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, "\n")
 }
 
 // policyGate enforces --require-signature and --deny-severity. It returns a
@@ -183,5 +263,10 @@ func init() {
 		cmd.Flags().BoolVar(&evidenceExport, "evidence-export", false, "export the assessment evidence bundle on arrival")
 		cmd.Flags().StringVar(&denySeverity, "deny-severity", "", "refuse deploy if the scan has findings at/above this severity (critical|high|medium|low)")
 		cmd.Flags().BoolVar(&requireSignature, "require-signature", false, "refuse deploy unless the vault is validly signed")
+		cmd.Flags().BoolVar(&applyDeploy, "apply", false, "execute the delivery: push images to the registry and apply workloads with kubectl (needs registry + cluster access)")
+		cmd.Flags().StringVar(&deployRegistry, "registry", "", "target registry to push sealed images to (default: the scaffold target)")
+		cmd.Flags().StringVar(&deployNamespace, "namespace", "", "Kubernetes namespace to apply workloads into")
+		cmd.Flags().StringVar(&deployKubeContext, "kube-context", "", "kubectl context to apply workloads with")
+		cmd.Flags().StringVar(&deployKubectl, "kubectl", "kubectl", "kubectl binary to invoke")
 	}
 }

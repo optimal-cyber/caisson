@@ -82,6 +82,27 @@ func TestVerifyLayoutDetectsMissingImage(t *testing.T) {
 	}
 }
 
+func TestRewriteRegistry(t *testing.T) {
+	digest := "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+	cases := []struct {
+		ref, registry, want string
+	}{
+		{"registry.airgap.local:5000/hello-app:1.0.0", "reg.enclave:5000", "reg.enclave:5000/hello-app:1.0.0"},
+		{"registry.airgap.local:5000/team/app:2", "reg.enclave:5000", "reg.enclave:5000/team/app:2"},
+		{"registry.airgap.local:5000/app@" + digest, "reg.enclave:5000", "reg.enclave:5000/app@" + digest},
+	}
+	for _, tc := range cases {
+		got, err := RewriteRegistry(tc.ref, tc.registry)
+		if err != nil {
+			t.Errorf("RewriteRegistry(%q): %v", tc.ref, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("RewriteRegistry(%q, %q) = %q, want %q", tc.ref, tc.registry, got, tc.want)
+		}
+	}
+}
+
 func TestVerifyLayoutDetectsTamperedBlob(t *testing.T) {
 	ref := "registry.airgap.local/app:1.0.0"
 	imgs := buildImages(t, ref)

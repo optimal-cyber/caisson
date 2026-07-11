@@ -99,9 +99,15 @@ go build -o caisson .
 #     ./caisson package create ./examples/hello-app --key caisson.key --pull-images
 
 # 4. DEPLOY — verifies seal + signature, then enforces a policy gate. A tampered,
-#    badly-signed, or policy-violating vault is refused (non-zero exit); the
-#    registry push + k8s apply are described but not yet executed.
+#    badly-signed, or policy-violating vault is refused (non-zero exit). Without
+#    --apply this prints the delivery plan (dry run).
 ./caisson deploy hello-app.caisson --require-signature --deny-severity critical --evidence-export
+
+# 4b. (needs a reachable registry + cluster) actually deliver: push the sealed
+#     images to the registry (go-containerregistry) and apply the workloads with
+#     kubectl. The seal/signature/policy checks still run first and gate it.
+#     ./caisson deploy hello-app.caisson --require-signature --apply \
+#         --registry reg.enclave:5000 --namespace prod
 
 # 5. export a real evidence bundle to disk, derived from the vault's actual
 #    digest + inventory (JSON + OSCAL-aligned + Markdown report)
@@ -135,9 +141,12 @@ offline; and `evidence export` writes a real bundle to
 disk (native JSON, an OSCAL-aligned assessment-results file, and a Markdown report) whose
 control mapping reflects the artifact's actual state — e.g. `SR-11` flips to *satisfied* once
 signed, `CM-8`/`SA-12` cite the real SBOM component count, and `RA-5` flips to *satisfied*
-once a scan is attached. Still placeholder (clearly marked in output): Sigstore/cosign
-keyless interop, deeper SBOM resolution (Syft), running a scanner (bring your own report),
-schema-validated OSCAL, and the actual registry push / Kubernetes apply.
+once a scan is attached; and `deploy --apply` performs the real delivery — pushing the
+sealed images to the target registry (go-containerregistry) and applying the workloads with
+`kubectl` — behind the seal, signature, and policy gate, needing a reachable registry and
+cluster with credentials (without `--apply` it prints the plan). Still placeholder (clearly
+marked in output): Sigstore/cosign keyless interop, deeper SBOM resolution (Syft), running a
+scanner (bring your own report), schema-validated OSCAL, and Helm-based applies.
 
 ### Test it locally
 
