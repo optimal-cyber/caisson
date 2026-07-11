@@ -2,7 +2,7 @@
 BIN := caisson
 PORT ?= 8000
 
-.PHONY: help build run demo test vet fmt tidy site clean
+.PHONY: help build run demo demo-pull test vet fmt tidy site clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -24,6 +24,12 @@ demo: build ## Generate a key, sign+pack the sample app, verify, and read it bac
 	@echo "\n== sbom export ==" && ./$(BIN) sbom export hello-app.caisson --out ./evidence
 	@echo "\n== deploy (policy gate: no criticals) ==" && ./$(BIN) deploy hello-app.caisson --deny-severity critical --require-signature --evidence-export
 	@echo "\n== evidence export ==" && ./$(BIN) evidence export hello-app.caisson --out ./evidence
+
+demo-pull: build ## Like demo, but ALSO pulls declared images into a sealed OCI layout (needs a reachable registry + creds)
+	@echo "== key gen ==" && ./$(BIN) key gen --out caisson-demo
+	@echo "\n== package create --pull-images (real image pulls; needs registry access) ==" && ./$(BIN) package create ./examples/hello-app --key caisson-demo.key --scan-report examples/hello-app-scan.grype.json --pull-images
+	@echo "\n== verify (seal now also covers the embedded OCI layout) ==" && ./$(BIN) verify hello-app.caisson --key caisson-demo.pub
+	@echo "\n== package inspect ==" && ./$(BIN) package inspect hello-app.caisson
 
 test: ## Run the Go tests
 	go test ./...

@@ -6,7 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/optimal-cyber/caisson/internal/oci"
 	"github.com/optimal-cyber/caisson/internal/signing"
+
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	v1random "github.com/google/go-containerregistry/pkg/v1/random"
 )
 
 func TestCreateOpenVerify(t *testing.T) {
@@ -177,6 +181,133 @@ func TestCreateRecordsFrameworksAndImages(t *testing.T) {
 		t.Errorf("Verify ok=%t err=%v after recording frameworks/images", ok, err)
 	}
 }
+
+func TestCreateEmbedsAndVerifiesImageLayout(t *testing.T) {
+	src := t.TempDir()
+	writeTmp(t, src, "app/server.py", "print('hi')\n")
+
+	// Build a real OCI layout offline from an in-memory image — no registry.
+	ref := "registry.airgap.local:5000/demo:1.0.0"
+	img, err := v1random.Image(1024, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	layoutDir := filepath.Join(t.TempDir(), oci.LayoutDir)
+	pulled, err := oci.WriteLayout(layoutDir, map[string]v1.Image{ref: img})
+	if err != nil {
+		t.Fatalf("WriteLayout: %v", err)
+	}
+
+	defer inDir(t, t.TempDir())()
+	_, out, err := Create(src, CreateOptions{
+		Name:           "demo",
+		Version:        "1.0.0",
+		Images:         []string{ref},
+		ImageLayoutDir: layoutDir,
+		PulledDigests:  map[string]string{ref: pulled[0].Digest},
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	m, err := Open(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Images) != 1 || !m.Images[0].Pulled || m.Images[0].Digest != pulled[0].Digest {
+		t.Fatalf("pulled image not recorded: %+v", m.Images)
+	}
+	if m.Images[0].Path != "images/" {
+		t.Errorf("pulled image path = %q, want images/", m.Images[0].Path)
+	}
+
+	// The sealed layout verifies against the digest in the signed manifest.
+	ok, _, err := Verify(out)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if !ok {
+		t.Error("Verify = false for a vault with an intact embedded image layout")
+	}
+}
+
+func TestVerifyDetectsTamperedEmbeddedImage(t *testing.T) {
+	src := t.TempDir()
+	writeTmp(t, src, "app/server.py", "print('hi')\n")
+
+	ref := "registry.airgap.local:5000/demo:1.0.0"
+	img, err := v1random.Image(1024, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	layoutDir := filepath.Join(t.TempDir(), oci.LayoutDir)
+	pulled, err := oci.WriteLayout(layoutDir, map[string]v1.Image{ref: img})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Corrupt a layer blob on disk *before* sealing, while the manifest still
+	// records the pristine digest — the sealed layout no longer matches.
+	layers, err := img.Layers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	lh, err := layers[0].Digest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	blob := filepath.Join(layoutDir, "blobs", "sha256", lh.Hex)
+	if err := os.WriteFile(blob, []byte("tampered payload"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	defer inDir(t, t.TempDir())()
+	_, out, err := Create(src, CreateOptions{
+		Name:           "demo",
+		Version:        "1.0.0",
+		Images:         []string{ref},
+		ImageLayoutDir: layoutDir,
+		PulledDigests:  map[string]string{ref: pulled[0].Digest},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ok, _, err := Verify(out)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if ok {
+		t.Error("Verify = true for a vault whose embedded image layout was tampered")
+	}
+}
+
+func TestVerifyFailsWhenPulledImageLayoutMissing(t *testing.T) {
+	src := t.TempDir()
+	writeTmp(t, src, "app/server.py", "print('hi')\n")
+	defer inDir(t, t.TempDir())()
+
+	// Manifest records a pulled image but no layout is embedded (ImageLayoutDir
+	// omitted) — an inconsistency Verify must catch.
+	_, out, err := Create(src, CreateOptions{
+		Name:          "demo",
+		Version:       "1.0.0",
+		Images:        []string{"registry.airgap.local:5000/demo:1.0.0"},
+		PulledDigests: map[string]string{"registry.airgap.local:5000/demo:1.0.0": "sha256:" + zeroDigest},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok, _, err := Verify(out)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if ok {
+		t.Error("Verify = true although a pulled image is recorded with no sealed layout")
+	}
+}
+
+const zeroDigest = "0000000000000000000000000000000000000000000000000000000000000000"
 
 func writeTmp(t *testing.T, root, rel, content string) {
 	t.Helper()

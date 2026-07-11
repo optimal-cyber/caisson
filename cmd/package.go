@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/optimal-cyber/caisson/internal/oci"
 	"github.com/optimal-cyber/caisson/internal/pkgformat"
 	"github.com/optimal-cyber/caisson/internal/signing"
 	"github.com/optimal-cyber/caisson/internal/spec"
@@ -20,11 +21,12 @@ var packageCmd = &cobra.Command{
 }
 
 var (
-	createName    string
-	createVersion string
-	createKey     string
-	createScan    string
-	createConfig  string
+	createName       string
+	createVersion    string
+	createKey        string
+	createScan       string
+	createConfig     string
+	createPullImages bool
 )
 
 var packageCreateCmd = &cobra.Command{
@@ -101,14 +103,43 @@ func runPackageCreate(c *cobra.Command, args []string) error {
 		}
 	}
 
+	// Optionally pull the declared images into an OCI layout sealed inside the
+	// vault. This is the real fetch path and needs registry access to the
+	// referenced images.
+	var layoutDir string
+	var pulledDigests map[string]string
+	if createPullImages {
+		if len(images) == 0 {
+			return errors.New("package create: --pull-images set but no images are declared (add images: to caisson.yaml)")
+		}
+		tmp, err := os.MkdirTemp("", "caisson-oci-")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(tmp)
+
+		layoutDir = filepath.Join(tmp, oci.LayoutDir)
+		note(c, "package create: pulling %d image(s) into an OCI layout (needs registry access)…", len(images))
+		pulled, err := oci.Bundle(layoutDir, images)
+		if err != nil {
+			return err
+		}
+		pulledDigests = make(map[string]string, len(pulled))
+		for _, p := range pulled {
+			pulledDigests[p.Reference] = p.Digest
+		}
+	}
+
 	m, out, err := pkgformat.Create(src, pkgformat.CreateOptions{
-		Name:       name,
-		Version:    version,
-		Signer:     signer,
-		Scan:       scan,
-		Frameworks: frameworks,
-		Images:     images,
-		Workloads:  workloads,
+		Name:           name,
+		Version:        version,
+		Signer:         signer,
+		Scan:           scan,
+		Frameworks:     frameworks,
+		Images:         images,
+		Workloads:      workloads,
+		ImageLayoutDir: layoutDir,
+		PulledDigests:  pulledDigests,
 	})
 	if err != nil {
 		return err
@@ -128,8 +159,11 @@ func runPackageCreate(c *cobra.Command, args []string) error {
 	if len(m.Frameworks) > 0 {
 		note(c, "  ✓ frameworks mapped: %s", joinComma(m.Frameworks))
 	}
-	if len(m.Images) > 0 {
-		note(c, "  · %d image(s) declared — pulling into an OCI layout needs registry access", len(m.Images))
+	if pulled := countPulled(m.Images); pulled > 0 {
+		note(c, "  ✓ %d image(s) pulled into a sealed OCI layout (%s)", pulled, "images/")
+	}
+	if declared := len(m.Images) - countPulled(m.Images); declared > 0 {
+		note(c, "  · %d image(s) declared — run --pull-images (with registry access) to seal them", declared)
 	}
 	note(c, "  ✓ manifest sealed (format %s)", m.FormatVersion)
 	if m.Signed {
@@ -145,6 +179,17 @@ func runPackageCreate(c *cobra.Command, args []string) error {
 		note(c, "\n  next:  caisson package inspect %s", out)
 	}
 	return nil
+}
+
+// countPulled reports how many image refs were pulled into the vault's OCI layout.
+func countPulled(images []pkgformat.ImageRef) int {
+	n := 0
+	for _, img := range images {
+		if img.Pulled {
+			n++
+		}
+	}
+	return n
 }
 
 // resolveSpec locates the caisson.yaml governing this create, if any. An
@@ -208,5 +253,6 @@ func init() {
 	packageCreateCmd.Flags().StringVar(&createKey, "key", "", "Ed25519 private key (PEM) to sign the vault and attest provenance")
 	packageCreateCmd.Flags().StringVar(&createScan, "scan-report", "", "Grype/Trivy JSON scan report to embed and attest")
 	packageCreateCmd.Flags().StringVar(&createConfig, "config", "", "path to a caisson.yaml (default: caisson.yaml in the source or working directory)")
+	packageCreateCmd.Flags().BoolVar(&createPullImages, "pull-images", false, "pull declared images into a sealed OCI layout (needs registry access)")
 	packageCmd.AddCommand(packageCreateCmd, packageInspectCmd, packageDeployCmd)
 }

@@ -43,9 +43,12 @@ func runVerify(c *cobra.Command, args []string) error {
 	if sealOK {
 		note(c, "  ✓ seal        payload digest matches manifest")
 	} else {
-		note(c, "  ✗ seal        payload digest does NOT match manifest")
+		note(c, "  ✗ seal        payload digest / embedded content does NOT match manifest")
 	}
 	note(c, "                %s", m.Digest)
+	if n := countPulled(m.Images); n > 0 {
+		note(c, "  ✓ images      %d image(s) sealed in an OCI layout, verified against the manifest", n)
+	}
 
 	var providedPub []byte
 	if verifyKey != "" {

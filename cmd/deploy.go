@@ -95,6 +95,23 @@ func runDeploy(c *cobra.Command, args []string) error {
 	for _, w := range workloads {
 		note(c, "      - %s", w)
 	}
+	var pulled, declared []string
+	for _, img := range m.Images {
+		if img.Pulled {
+			pulled = append(pulled, img.Reference)
+		} else {
+			declared = append(declared, img.Reference)
+		}
+	}
+	if len(pulled) > 0 {
+		note(c, "  · %d image(s) sealed in the vault's OCI layout (verified with the seal):", len(pulled))
+		for _, r := range pulled {
+			note(c, "      - %s", r)
+		}
+	}
+	if len(declared) > 0 {
+		note(c, "  · %d image(s) declared but not sealed (re-run create --pull-images with registry access)", len(declared))
+	}
 	note(c, "\n  [not implemented] would push images to %s", target.Registry)
 	note(c, "  [not implemented] would apply %d workload(s) to cluster %q", len(workloads), target.Cluster)
 	if evidenceExport {

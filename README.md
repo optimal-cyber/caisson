@@ -92,6 +92,12 @@ go build -o caisson .
 #     ./caisson package create ./examples/hello-app --key caisson.key \
 #         --scan-report examples/hello-app-scan.grype.json
 
+# 3c. (optional, needs a reachable registry) pull the declared images into an
+#     OCI layout sealed inside the vault; the seal + verify then cover the images
+#     too (content-addressed). Without --pull-images, images are recorded as
+#     declared-only.
+#     ./caisson package create ./examples/hello-app --key caisson.key --pull-images
+
 # 4. DEPLOY — verifies seal + signature, then enforces a policy gate. A tampered,
 #    badly-signed, or policy-violating vault is refused (non-zero exit); the
 #    registry push + k8s apply are described but not yet executed.
@@ -120,7 +126,12 @@ requirements.txt / Dockerfile), and — with `--key` — an **Ed25519 signature*
 signature, identity, provenance, and SBOM/vuln attestations and **refuse a tampered,
 badly-signed, or policy-violating vault** (non-zero exit); `package create --scan-report`
 ingests a Grype/Trivy scan, seals it, and DSSE-attests it, and `deploy --deny-severity` /
-`--require-signature` enforce a policy gate; and `evidence export` writes a real bundle to
+`--require-signature` enforce a policy gate; `package create --pull-images` fetches the
+declared container images into an **OCI image layout sealed inside the vault** (via
+go-containerregistry), records each image's content digest in the signed manifest, and
+`verify`/`deploy` re-check that layout so a tampered image is refused — real image pulls need
+registry access, but the layout writing + verification are content-addressed and unit-tested
+offline; and `evidence export` writes a real bundle to
 disk (native JSON, an OSCAL-aligned assessment-results file, and a Markdown report) whose
 control mapping reflects the artifact's actual state — e.g. `SR-11` flips to *satisfied* once
 signed, `CM-8`/`SA-12` cite the real SBOM component count, and `RA-5` flips to *satisfied*
@@ -200,6 +211,7 @@ caisson/
 └── internal/
     ├── spec/                   # caisson.yaml: parse the package definition + scaffold init
     ├── pkgformat/              # the .caisson vault format: pack, inspect, seal, SBOM
+    ├── oci/                    # pull images into a sealed OCI layout; verify it (content-addressed)
     ├── evidence/               # NIST 800-53 / CMMC control mapping + bundle export
     ├── deploy/                 # verify seal → OCI registry push → k8s apply → evidence
     └── brand/                  # shared identity strings + terminal banner

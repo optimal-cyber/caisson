@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/optimal-cyber/caisson/internal/attest"
+	"github.com/optimal-cyber/caisson/internal/oci"
 	"github.com/optimal-cyber/caisson/internal/sbom"
 	"github.com/optimal-cyber/caisson/internal/signing"
 	"github.com/optimal-cyber/caisson/internal/vuln"
@@ -48,6 +49,7 @@ const (
 	sbomAttName    = "attestations/sbom.dsse.json"
 	scanAttName    = "attestations/vuln.dsse.json"
 	payloadPrefix  = "payload/"
+	imagesPrefix   = "images/"
 )
 
 // FileEntry is one payload file recorded in the manifest inventory.
@@ -130,6 +132,13 @@ type CreateOptions struct {
 	Frameworks []string     // compliance frameworks the evidence is asserted to map to
 	Images     []string     // container image references the workload declares
 	Workloads  []string     // k8s manifest paths (relative to source) to apply on arrival
+
+	// ImageLayoutDir, when set, is a directory holding an OCI image layout to
+	// seal into the vault under images/. PulledDigests maps declared image
+	// references to the content-addressed digest pulled into that layout; those
+	// references are recorded in the manifest as pulled.
+	ImageLayoutDir string
+	PulledDigests  map[string]string
 }
 
 // Create packs source (a directory) into "<name>.caisson" in the current
@@ -199,7 +208,7 @@ func Create(source string, opts CreateOptions) (*Manifest, string, error) {
 		Digest:        digestOf(files),
 		Signed:        opts.Signer != nil,
 		Frameworks:    opts.Frameworks,
-		Images:        declaredImages(opts.Images),
+		Images:        buildImageRefs(opts.Images, opts.PulledDigests),
 		Workloads:     opts.Workloads,
 		SBOM: &SBOMRef{
 			Format:      sbom.Format,
@@ -237,7 +246,7 @@ func Create(source string, opts CreateOptions) (*Manifest, string, error) {
 	}
 
 	out := name + Extension
-	if err := writeArchive(out, source, m, manifestJSON, sbomBytes, scanBytes, sig, prov, sbomAtt, scanAtt, now); err != nil {
+	if err := writeArchive(out, source, opts.ImageLayoutDir, m, manifestJSON, sbomBytes, scanBytes, sig, prov, sbomAtt, scanAtt, now); err != nil {
 		return nil, "", err
 	}
 	return m, out, nil
@@ -359,16 +368,35 @@ func hashFile(path string) (string, int64, error) {
 	return hex.EncodeToString(h.Sum(nil)), n, nil
 }
 
-// declaredImages records the workload's declared image references as unpulled
-// ImageRefs. Pulling them into the vault's OCI layout (which fills in Digest and
-// Path) needs registry access and happens separately.
-func declaredImages(refs []string) []ImageRef {
+// buildImageRefs records the workload's declared image references. A reference
+// present in pulled (ref -> content digest) was pulled into the vault's OCI
+// layout, so it is recorded with its digest and layout path; the rest are
+// declared-only (pulling them needs registry access).
+func buildImageRefs(refs []string, pulled map[string]string) []ImageRef {
 	if len(refs) == 0 {
 		return nil
 	}
 	out := make([]ImageRef, 0, len(refs))
 	for _, r := range refs {
-		out = append(out, ImageRef{Reference: r, Pulled: false})
+		ref := ImageRef{Reference: r}
+		if dg, ok := pulled[r]; ok {
+			ref.Digest = dg
+			ref.Path = imagesPrefix
+			ref.Pulled = true
+		}
+		out = append(out, ref)
+	}
+	return out
+}
+
+// pulledDigests returns the content digests of images pulled into the vault's
+// OCI layout, for integrity verification.
+func pulledDigests(m *Manifest) []string {
+	var out []string
+	for _, img := range m.Images {
+		if img.Pulled && img.Digest != "" {
+			out = append(out, img.Digest)
+		}
 	}
 	return out
 }
@@ -383,7 +411,7 @@ func digestOf(files []FileEntry) string {
 	return "sha256:" + hex.EncodeToString(h.Sum(nil))
 }
 
-func writeArchive(outPath, source string, m *Manifest, manifestJSON, sbomBytes, scanBytes []byte, sig *Signature, prov, sbomAtt, scanAtt *signing.Envelope, now time.Time) (err error) {
+func writeArchive(outPath, source, imageLayoutDir string, m *Manifest, manifestJSON, sbomBytes, scanBytes []byte, sig *Signature, prov, sbomAtt, scanAtt *signing.Envelope, now time.Time) (err error) {
 	out, err := os.Create(outPath)
 	if err != nil {
 		return err
@@ -434,10 +462,53 @@ func writeArchive(outPath, source string, m *Manifest, manifestJSON, sbomBytes, 
 			return err
 		}
 	}
+	if imageLayoutDir != "" {
+		if err := writeLayoutFiles(tw, imageLayoutDir, now); err != nil {
+			return err
+		}
+	}
 	if err := tw.Close(); err != nil {
 		return err
 	}
 	return gz.Close()
+}
+
+// writeLayoutFiles seals every file of an OCI image layout into the archive
+// under images/, preserving the layout's directory structure.
+func writeLayoutFiles(tw *tar.Writer, layoutDir string, now time.Time) error {
+	return filepath.WalkDir(layoutDir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !d.Type().IsRegular() {
+			return nil
+		}
+		rel, err := filepath.Rel(layoutDir, p)
+		if err != nil {
+			return err
+		}
+		f, err := os.Open(p)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		hdr := &tar.Header{
+			Name:     imagesPrefix + filepath.ToSlash(rel),
+			Mode:     0o644,
+			Size:     info.Size(),
+			ModTime:  now,
+			Typeflag: tar.TypeReg,
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return err
+		}
+		_, err = io.Copy(tw, f)
+		return err
+	})
 }
 
 func isNil(v any) bool {
@@ -547,7 +618,94 @@ func Verify(path string) (ok bool, m *Manifest, err error) {
 	if m.Scan != nil && !memberMatches(path, m.Scan.Path, m.Scan.SHA256) {
 		ok = false
 	}
+	if digests := pulledDigests(m); len(digests) > 0 {
+		imagesOK, err := verifyImages(path, digests)
+		if err != nil {
+			return false, m, err
+		}
+		if !imagesOK {
+			ok = false
+		}
+	}
 	return ok, m, nil
+}
+
+// verifyImages extracts the sealed OCI layout to a temp directory and confirms
+// each recorded image digest is present and re-hashes correctly. Because the
+// digests ride inside the signed manifest and OCI blobs are content-addressed,
+// a tampered image fails this check.
+func verifyImages(vaultPath string, wantDigests []string) (bool, error) {
+	tmp, err := os.MkdirTemp("", "caisson-verify-oci-")
+	if err != nil {
+		return false, err
+	}
+	defer os.RemoveAll(tmp)
+
+	found, err := extractLayout(vaultPath, tmp)
+	if err != nil {
+		return false, err
+	}
+	if !found {
+		// The manifest records pulled images but no layout is sealed — tampered.
+		return false, nil
+	}
+	if err := oci.VerifyLayout(tmp, wantDigests); err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
+// extractLayout writes every images/ member of the vault into destDir (stripping
+// the images/ prefix so destDir is the layout root). It reports whether any
+// layout file was present.
+func extractLayout(vaultPath, destDir string) (bool, error) {
+	f, err := os.Open(vaultPath)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return false, err
+	}
+	defer gz.Close()
+
+	found := false
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return false, err
+		}
+		if !strings.HasPrefix(hdr.Name, imagesPrefix) || hdr.Typeflag != tar.TypeReg {
+			continue
+		}
+		rel := strings.TrimPrefix(hdr.Name, imagesPrefix)
+		out := filepath.Join(destDir, filepath.FromSlash(rel))
+		// Guard against path traversal from a crafted archive.
+		if !strings.HasPrefix(out, filepath.Clean(destDir)+string(os.PathSeparator)) {
+			return false, fmt.Errorf("pkgformat: unsafe layout path %q", hdr.Name)
+		}
+		if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+			return false, err
+		}
+		w, err := os.Create(out)
+		if err != nil {
+			return false, err
+		}
+		if _, err := io.Copy(w, tr); err != nil {
+			w.Close()
+			return false, err
+		}
+		if err := w.Close(); err != nil {
+			return false, err
+		}
+		found = true
+	}
+	return found, nil
 }
 
 // memberMatches reports whether an archive member exists and its SHA-256 matches.
