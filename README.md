@@ -128,8 +128,9 @@ go build -o caisson .
 reads it when present, with flags overriding individual fields; `package create` writes a
 standard gzip+tar
 `.caisson` (open it with `tar -tzf`) with a per-file SHA-256 inventory and content digest, an
-embedded **CycloneDX 1.6 SBOM** (dependencies detected from go.mod / package.json /
-requirements.txt / Dockerfile), and — with `--key` — an **Ed25519 signature** plus
+embedded **CycloneDX SBOM** (native detection from go.mod / package.json /
+requirements.txt / Dockerfile, or `--syft` to wrap **Anchore Syft** for deep resolution —
+transitive deps, OS packages, licenses), and — with `--key` — an **Ed25519 signature** plus
 **DSSE-wrapped SLSA provenance and CycloneDX SBOM attestations**; `package inspect`,
 `sbom view`, and `sbom export` read them back; `verify` and `deploy` check the seal,
 signature, identity, provenance, and SBOM/vuln attestations and **refuse a tampered,
@@ -150,7 +151,7 @@ performs the real delivery — pushing the sealed images to the target registry
 (go-containerregistry) and applying the workloads with `kubectl` — behind the seal, signature,
 and policy gate, needing a reachable registry and cluster with credentials (without `--apply` it
 prints the plan). Still placeholder (clearly marked in output): Sigstore/cosign keyless interop,
-deeper SBOM resolution (Syft), running a scanner (bring your own report), and Helm-based applies.
+running a scanner (bring your own report), and Helm-based applies.
 
 ### Test it locally
 

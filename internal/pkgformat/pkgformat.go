@@ -65,6 +65,7 @@ type FileEntry struct {
 type SBOMRef struct {
 	Format      string `json:"format"`
 	SpecVersion string `json:"specVersion"`
+	Generator   string `json:"generator,omitempty"`
 	Path        string `json:"path"`
 	SHA256      string `json:"sha256"`
 	Components  int    `json:"components"`
@@ -132,6 +133,7 @@ type CreateOptions struct {
 	Frameworks []string     // compliance frameworks the evidence is asserted to map to
 	Images     []string     // container image references the workload declares
 	Workloads  []string     // k8s manifest paths (relative to source) to apply on arrival
+	Syft       bool         // generate the SBOM with Anchore Syft (deep) instead of native detection
 
 	// ImageLayoutDir, when set, is a directory holding an OCI image layout to
 	// seal into the vault under images/. PulledDigests maps declared image
@@ -170,14 +172,11 @@ func Create(source string, opts CreateOptions) (*Manifest, string, error) {
 		return nil, "", err
 	}
 
-	sbomDoc, err := sbom.Generate(source, name, version, now)
+	sbomResult, err := sbom.Collect(source, name, version, now, opts.Syft)
 	if err != nil {
 		return nil, "", err
 	}
-	sbomBytes, err := sbomDoc.JSON()
-	if err != nil {
-		return nil, "", err
-	}
+	sbomBytes := sbomResult.JSON
 	sbomSum := sha256.Sum256(sbomBytes)
 
 	var scanBytes []byte
@@ -211,11 +210,12 @@ func Create(source string, opts CreateOptions) (*Manifest, string, error) {
 		Images:        buildImageRefs(opts.Images, opts.PulledDigests),
 		Workloads:     opts.Workloads,
 		SBOM: &SBOMRef{
-			Format:      sbom.Format,
-			SpecVersion: sbom.SpecVersion,
+			Format:      sbomResult.Format,
+			SpecVersion: sbomResult.SpecVersion,
+			Generator:   sbomResult.Generator,
 			Path:        sbomFileName,
 			SHA256:      hex.EncodeToString(sbomSum[:]),
-			Components:  len(sbomDoc.Components),
+			Components:  sbomResult.Components,
 		},
 		Scan:  scanRef,
 		Files: files,
@@ -235,7 +235,7 @@ func Create(source string, opts CreateOptions) (*Manifest, string, error) {
 		if prov, err = buildProvenance(opts.Signer, m, now); err != nil {
 			return nil, "", err
 		}
-		if sbomAtt, err = buildSBOMAttestation(opts.Signer, m, sbomDoc); err != nil {
+		if sbomAtt, err = buildSBOMAttestation(opts.Signer, m, sbomBytes); err != nil {
 			return nil, "", err
 		}
 		if opts.Scan != nil {
@@ -287,8 +287,10 @@ func buildProvenance(k *signing.Key, m *Manifest, now time.Time) (*signing.Envel
 	return k.WrapDSSE(payload)
 }
 
-func buildSBOMAttestation(k *signing.Key, m *Manifest, doc *sbom.Document) (*signing.Envelope, error) {
-	stmt := attest.SBOM(m.Name, strings.TrimPrefix(m.Digest, "sha256:"), doc)
+func buildSBOMAttestation(k *signing.Key, m *Manifest, sbomBytes []byte) (*signing.Envelope, error) {
+	// The predicate is the exact SBOM bytes embedded in the vault, so the
+	// attestation and sbom.cdx.json are byte-identical.
+	stmt := attest.SBOM(m.Name, strings.TrimPrefix(m.Digest, "sha256:"), json.RawMessage(sbomBytes))
 	payload, err := json.Marshal(stmt)
 	if err != nil {
 		return nil, err

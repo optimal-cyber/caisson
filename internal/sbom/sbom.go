@@ -1,11 +1,14 @@
-// Package sbom generates a real CycloneDX 1.6 software bill of materials by
-// scanning a vault's payload for dependency manifests — go.mod, package.json,
-// requirements.txt, and Dockerfile base images. Standard-library only, so it
-// runs disconnected.
+// Package sbom produces a CycloneDX software bill of materials for a vault's
+// payload. Two backends, selected by Collect:
 //
-// This is native manifest-detection, not full dependency resolution. Deeper
-// analysis (transitive graphs, OS packages, licenses) via Syft is a documented
-// follow-on; the output here is standard CycloneDX so that migration is clean.
+//   - native (default): manifest detection over go.mod, package.json,
+//     requirements.txt, and Dockerfile base images. Standard-library only, so it
+//     runs disconnected.
+//   - syft (opt-in): shells out to Anchore Syft for deep resolution (transitive
+//     graphs, OS packages, licenses), embedding syft's CycloneDX verbatim.
+//
+// Both emit standard CycloneDX, so the vault format and the SBOM attestation are
+// identical regardless of backend.
 package sbom
 
 import (

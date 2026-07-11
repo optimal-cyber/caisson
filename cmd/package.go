@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -27,6 +28,7 @@ var (
 	createScan       string
 	createConfig     string
 	createPullImages bool
+	createSyft       bool
 )
 
 var packageCreateCmd = &cobra.Command{
@@ -138,6 +140,7 @@ func runPackageCreate(c *cobra.Command, args []string) error {
 		Frameworks:     frameworks,
 		Images:         images,
 		Workloads:      workloads,
+		Syft:           createSyft,
 		ImageLayoutDir: layoutDir,
 		PulledDigests:  pulledDigests,
 	})
@@ -151,7 +154,11 @@ func runPackageCreate(c *cobra.Command, args []string) error {
 	note(c, "  ✓ packed %d files · %s", m.FileCount, humanSize(m.TotalSize))
 	note(c, "  ✓ per-file SHA-256 recorded · content digest computed")
 	if m.SBOM != nil {
-		note(c, "  ✓ %s %s SBOM embedded (%d components)", m.SBOM.Format, m.SBOM.SpecVersion, m.SBOM.Components)
+		via := ""
+		if m.SBOM.Generator != "" {
+			via = fmt.Sprintf(", via %s", m.SBOM.Generator)
+		}
+		note(c, "  ✓ %s %s SBOM embedded (%d components%s)", m.SBOM.Format, m.SBOM.SpecVersion, m.SBOM.Components, via)
 	}
 	if m.Scan != nil {
 		note(c, "  ✓ %s scan embedded (%d findings: %s)", m.Scan.Source, m.Scan.Total, joinComma(scanSummary(m.Scan.Counts)))
@@ -254,5 +261,6 @@ func init() {
 	packageCreateCmd.Flags().StringVar(&createScan, "scan-report", "", "Grype/Trivy JSON scan report to embed and attest")
 	packageCreateCmd.Flags().StringVar(&createConfig, "config", "", "path to a caisson.yaml (default: caisson.yaml in the source or working directory)")
 	packageCreateCmd.Flags().BoolVar(&createPullImages, "pull-images", false, "pull declared images into a sealed OCI layout (needs registry access)")
+	packageCreateCmd.Flags().BoolVar(&createSyft, "syft", false, "generate the SBOM with Anchore Syft for deep resolution (needs syft on PATH); default is native detection")
 	packageCmd.AddCommand(packageCreateCmd, packageInspectCmd, packageDeployCmd)
 }
