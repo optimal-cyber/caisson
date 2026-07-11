@@ -16,12 +16,12 @@ run: build ## Build, then run with no args (prints the vault banner)
 
 demo: build ## Generate a key, sign+pack the sample app, verify, and read it back
 	@echo "== key gen ==" && ./$(BIN) key gen --out caisson-demo
-	@echo "\n== package create (signed) ==" && ./$(BIN) package create ./examples/hello-app --version 1.0.0 --key caisson-demo.key
+	@echo "\n== package create (signed + scan) ==" && ./$(BIN) package create ./examples/hello-app --version 1.0.0 --key caisson-demo.key --scan-report examples/hello-app-scan.grype.json
 	@echo "\n== verify (seal + signature + SLSA provenance) ==" && ./$(BIN) verify hello-app.caisson --key caisson-demo.pub
 	@echo "\n== package inspect ==" && ./$(BIN) package inspect hello-app.caisson
 	@echo "\n== sbom view (real CycloneDX) ==" && ./$(BIN) sbom view hello-app.caisson
 	@echo "\n== sbom export ==" && ./$(BIN) sbom export hello-app.caisson --out ./evidence
-	@echo "\n== deploy ==" && ./$(BIN) deploy hello-app.caisson --evidence-export
+	@echo "\n== deploy (policy gate: no criticals) ==" && ./$(BIN) deploy hello-app.caisson --deny-severity critical --require-signature --evidence-export
 	@echo "\n== evidence export ==" && ./$(BIN) evidence export hello-app.caisson --out ./evidence
 
 test: ## Run the Go tests

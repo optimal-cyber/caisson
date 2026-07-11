@@ -13,6 +13,7 @@ const (
 	StatementType          = "https://in-toto.io/Statement/v1"
 	SLSAPredicateType      = "https://slsa.dev/provenance/v1"
 	CycloneDXPredicateType = "https://cyclonedx.org/bom"
+	VulnPredicateType      = "https://cosign.sigstore.dev/attestation/vuln/v1"
 
 	// BuildType identifies how a Caisson vault is produced.
 	BuildType = "https://caisson.gooptimal.io/buildtypes/package-create/v0.1"
@@ -103,5 +104,20 @@ func SBOM(name, digestHex string, cyclonedx any) *Statement {
 		}},
 		PredicateType: CycloneDXPredicateType,
 		Predicate:     cyclonedx,
+	}
+}
+
+// Vuln builds an in-toto vulnerability-scan attestation statement for a vault.
+// The predicate is the normalized scan report; digestHex is the vault's content
+// digest as bare hex.
+func Vuln(name, digestHex string, report any) *Statement {
+	return &Statement{
+		Type: StatementType,
+		Subject: []Subject{{
+			Name:   name + ".caisson",
+			Digest: map[string]string{"sha256": digestHex},
+		}},
+		PredicateType: VulnPredicateType,
+		Predicate:     report,
 	}
 }

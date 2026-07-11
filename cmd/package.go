@@ -5,6 +5,7 @@ import (
 
 	"github.com/optimal-cyber/caisson/internal/pkgformat"
 	"github.com/optimal-cyber/caisson/internal/signing"
+	"github.com/optimal-cyber/caisson/internal/vuln"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +20,7 @@ var (
 	createName    string
 	createVersion string
 	createKey     string
+	createScan    string
 )
 
 var packageCreateCmd = &cobra.Command{
@@ -48,10 +50,23 @@ inventory is file-level.`,
 			}
 		}
 
+		var scan *vuln.Report
+		if createScan != "" {
+			data, err := os.ReadFile(createScan)
+			if err != nil {
+				return err
+			}
+			scan, err = vuln.Parse(data)
+			if err != nil {
+				return err
+			}
+		}
+
 		m, out, err := pkgformat.Create(src, pkgformat.CreateOptions{
 			Name:    createName,
 			Version: createVersion,
 			Signer:  signer,
+			Scan:    scan,
 		})
 		if err != nil {
 			return err
@@ -61,6 +76,9 @@ inventory is file-level.`,
 		note(c, "  ✓ per-file SHA-256 recorded · content digest computed")
 		if m.SBOM != nil {
 			note(c, "  ✓ %s %s SBOM embedded (%d components)", m.SBOM.Format, m.SBOM.SpecVersion, m.SBOM.Components)
+		}
+		if m.Scan != nil {
+			note(c, "  ✓ %s scan embedded (%d findings: %s)", m.Scan.Source, m.Scan.Total, joinComma(scanSummary(m.Scan.Counts)))
 		}
 		note(c, "  ✓ manifest sealed (format %s)", m.FormatVersion)
 		if m.Signed {
@@ -108,5 +126,6 @@ func init() {
 	packageCreateCmd.Flags().StringVar(&createName, "name", "", "package name (default: source directory name)")
 	packageCreateCmd.Flags().StringVar(&createVersion, "version", "", "package version (default: 0.0.0)")
 	packageCreateCmd.Flags().StringVar(&createKey, "key", "", "Ed25519 private key (PEM) to sign the vault and attest provenance")
+	packageCreateCmd.Flags().StringVar(&createScan, "scan-report", "", "Grype/Trivy JSON scan report to embed and attest")
 	packageCmd.AddCommand(packageCreateCmd, packageInspectCmd, packageDeployCmd)
 }

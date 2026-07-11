@@ -16,6 +16,20 @@ func errNoSBOM(path string) error {
 	return fmt.Errorf("no embedded SBOM found in %s", path)
 }
 
+// scanSummary renders per-severity counts in severity order, skipping zeros.
+func scanSummary(counts map[string]int) []string {
+	var out []string
+	for _, sev := range []string{"critical", "high", "medium", "low", "negligible", "unknown"} {
+		if n := counts[sev]; n > 0 {
+			out = append(out, fmt.Sprintf("%d %s", n, sev))
+		}
+	}
+	if len(out) == 0 {
+		out = append(out, "0 findings")
+	}
+	return out
+}
+
 // humanSize renders a byte count as a compact human-readable string.
 func humanSize(n int64) string {
 	const unit = 1024

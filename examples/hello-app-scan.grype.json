@@ -1,0 +1,17 @@
+{
+  "descriptor": { "name": "grype", "version": "0.79.0" },
+  "matches": [
+    {
+      "vulnerability": { "id": "CVE-2024-2222", "severity": "High", "fix": { "versions": ["2.32.3"], "state": "fixed" } },
+      "artifact": { "name": "requests", "version": "2.32.0" }
+    },
+    {
+      "vulnerability": { "id": "CVE-2024-3333", "severity": "Medium", "fix": { "versions": [], "state": "unknown" } },
+      "artifact": { "name": "flask", "version": "3.0.3" }
+    },
+    {
+      "vulnerability": { "id": "CVE-2023-4444", "severity": "Low", "fix": { "versions": ["22.0.1"], "state": "fixed" } },
+      "artifact": { "name": "gunicorn", "version": "22.0.0" }
+    }
+  ]
+}

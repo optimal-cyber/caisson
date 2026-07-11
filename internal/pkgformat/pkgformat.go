@@ -31,6 +31,7 @@ import (
 	"github.com/optimal-cyber/caisson/internal/attest"
 	"github.com/optimal-cyber/caisson/internal/sbom"
 	"github.com/optimal-cyber/caisson/internal/signing"
+	"github.com/optimal-cyber/caisson/internal/vuln"
 )
 
 const (
@@ -42,8 +43,10 @@ const (
 	manifestName   = "manifest.json"
 	signatureName  = "signature.json"
 	sbomFileName   = "sbom.cdx.json"
+	scanFileName   = "scan.json"
 	provenanceName = "attestations/provenance.dsse.json"
 	sbomAttName    = "attestations/sbom.dsse.json"
+	scanAttName    = "attestations/vuln.dsse.json"
 	payloadPrefix  = "payload/"
 )
 
@@ -65,6 +68,16 @@ type SBOMRef struct {
 	Components  int    `json:"components"`
 }
 
+// ScanRef records the vulnerability scan embedded in the vault, bound to the
+// signed manifest.
+type ScanRef struct {
+	Source string         `json:"source"`
+	Path   string         `json:"path"`
+	SHA256 string         `json:"sha256"`
+	Total  int            `json:"total"`
+	Counts map[string]int `json:"counts"`
+}
+
 // Manifest is the sealed metadata carried inside every vault (manifest.json).
 type Manifest struct {
 	FormatVersion string      `json:"formatVersion"`
@@ -77,6 +90,7 @@ type Manifest struct {
 	Digest        string      `json:"digest"`
 	Signed        bool        `json:"signed"`
 	SBOM          *SBOMRef    `json:"sbom,omitempty"`
+	Scan          *ScanRef    `json:"scan,omitempty"`
 	Files         []FileEntry `json:"files"`
 }
 
@@ -98,6 +112,7 @@ type CreateOptions struct {
 	Version string       // defaults to "0.0.0"
 	Now     time.Time    // defaults to time.Now().UTC(); injectable for tests
 	Signer  *signing.Key // when set, the vault is signed and attestations are added
+	Scan    *vuln.Report // when set, the scan is embedded and (if signing) attested
 }
 
 // Create packs source (a directory) into "<name>.caisson" in the current
@@ -139,6 +154,23 @@ func Create(source string, opts CreateOptions) (*Manifest, string, error) {
 	}
 	sbomSum := sha256.Sum256(sbomBytes)
 
+	var scanBytes []byte
+	var scanRef *ScanRef
+	if opts.Scan != nil {
+		scanBytes, err = opts.Scan.JSON()
+		if err != nil {
+			return nil, "", err
+		}
+		scanSum := sha256.Sum256(scanBytes)
+		scanRef = &ScanRef{
+			Source: opts.Scan.Source,
+			Path:   scanFileName,
+			SHA256: hex.EncodeToString(scanSum[:]),
+			Total:  len(opts.Scan.Findings),
+			Counts: opts.Scan.Counts(),
+		}
+	}
+
 	m := &Manifest{
 		FormatVersion: FormatVersion,
 		Name:          name,
@@ -156,6 +188,7 @@ func Create(source string, opts CreateOptions) (*Manifest, string, error) {
 			SHA256:      hex.EncodeToString(sbomSum[:]),
 			Components:  len(sbomDoc.Components),
 		},
+		Scan:  scanRef,
 		Files: files,
 	}
 
@@ -165,7 +198,7 @@ func Create(source string, opts CreateOptions) (*Manifest, string, error) {
 	}
 
 	var sig *Signature
-	var prov, sbomAtt *signing.Envelope
+	var prov, sbomAtt, scanAtt *signing.Envelope
 	if opts.Signer != nil {
 		if sig, err = buildSignature(opts.Signer, manifestJSON); err != nil {
 			return nil, "", err
@@ -176,10 +209,15 @@ func Create(source string, opts CreateOptions) (*Manifest, string, error) {
 		if sbomAtt, err = buildSBOMAttestation(opts.Signer, m, sbomDoc); err != nil {
 			return nil, "", err
 		}
+		if opts.Scan != nil {
+			if scanAtt, err = buildVulnAttestation(opts.Signer, m, opts.Scan); err != nil {
+				return nil, "", err
+			}
+		}
 	}
 
 	out := name + Extension
-	if err := writeArchive(out, source, m, manifestJSON, sbomBytes, sig, prov, sbomAtt, now); err != nil {
+	if err := writeArchive(out, source, m, manifestJSON, sbomBytes, scanBytes, sig, prov, sbomAtt, scanAtt, now); err != nil {
 		return nil, "", err
 	}
 	return m, out, nil
@@ -222,6 +260,15 @@ func buildProvenance(k *signing.Key, m *Manifest, now time.Time) (*signing.Envel
 
 func buildSBOMAttestation(k *signing.Key, m *Manifest, doc *sbom.Document) (*signing.Envelope, error) {
 	stmt := attest.SBOM(m.Name, strings.TrimPrefix(m.Digest, "sha256:"), doc)
+	payload, err := json.Marshal(stmt)
+	if err != nil {
+		return nil, err
+	}
+	return k.WrapDSSE(payload)
+}
+
+func buildVulnAttestation(k *signing.Key, m *Manifest, report *vuln.Report) (*signing.Envelope, error) {
+	stmt := attest.Vuln(m.Name, strings.TrimPrefix(m.Digest, "sha256:"), report)
 	payload, err := json.Marshal(stmt)
 	if err != nil {
 		return nil, err
@@ -302,7 +349,7 @@ func digestOf(files []FileEntry) string {
 	return "sha256:" + hex.EncodeToString(h.Sum(nil))
 }
 
-func writeArchive(outPath, source string, m *Manifest, manifestJSON, sbomBytes []byte, sig *Signature, prov, sbomAtt *signing.Envelope, now time.Time) (err error) {
+func writeArchive(outPath, source string, m *Manifest, manifestJSON, sbomBytes, scanBytes []byte, sig *Signature, prov, sbomAtt, scanAtt *signing.Envelope, now time.Time) (err error) {
 	out, err := os.Create(outPath)
 	if err != nil {
 		return err
@@ -323,6 +370,11 @@ func writeArchive(outPath, source string, m *Manifest, manifestJSON, sbomBytes [
 	if err := writeBytes(tw, sbomFileName, sbomBytes, now); err != nil {
 		return err
 	}
+	if scanBytes != nil {
+		if err := writeBytes(tw, scanFileName, scanBytes, now); err != nil {
+			return err
+		}
+	}
 	for _, part := range []struct {
 		name string
 		val  any
@@ -330,6 +382,7 @@ func writeArchive(outPath, source string, m *Manifest, manifestJSON, sbomBytes [
 		{signatureName, sig},
 		{provenanceName, prov},
 		{sbomAttName, sbomAtt},
+		{scanAttName, scanAtt},
 	} {
 		if isNil(part.val) {
 			continue
@@ -454,17 +507,23 @@ func Verify(path string) (ok bool, m *Manifest, err error) {
 	}
 	ok = computed == m.Digest
 
-	if m.SBOM != nil {
-		data, present, err := readMember(path, m.SBOM.Path)
-		if err != nil {
-			return false, m, err
-		}
-		sum := sha256.Sum256(data)
-		if !present || hex.EncodeToString(sum[:]) != m.SBOM.SHA256 {
-			ok = false
-		}
+	if m.SBOM != nil && !memberMatches(path, m.SBOM.Path, m.SBOM.SHA256) {
+		ok = false
+	}
+	if m.Scan != nil && !memberMatches(path, m.Scan.Path, m.Scan.SHA256) {
+		ok = false
 	}
 	return ok, m, nil
+}
+
+// memberMatches reports whether an archive member exists and its SHA-256 matches.
+func memberMatches(path, name, wantSHA string) bool {
+	data, present, err := readMember(path, name)
+	if err != nil || !present {
+		return false
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]) == wantSHA
 }
 
 func payloadDigest(path string) (string, error) {
@@ -515,6 +574,8 @@ type SignatureResult struct {
 	ProvenanceValid        bool
 	SBOMAttestationPresent bool
 	SBOMAttestationValid   bool
+	VulnAttestationPresent bool
+	VulnAttestationValid   bool
 }
 
 // VerifySignature checks the vault's Ed25519 signature over the manifest and, if
@@ -569,6 +630,7 @@ func VerifySignature(path string, providedPubPEM []byte) (*SignatureResult, erro
 
 	res.ProvenancePresent, res.ProvenanceValid = verifyEnvelope(path, provenanceName, key)
 	res.SBOMAttestationPresent, res.SBOMAttestationValid = verifyEnvelope(path, sbomAttName, key)
+	res.VulnAttestationPresent, res.VulnAttestationValid = verifyEnvelope(path, scanAttName, key)
 	return res, nil
 }
 

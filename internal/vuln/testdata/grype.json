@@ -1,0 +1,16 @@
+{
+  "matches": [
+    {
+      "vulnerability": { "id": "CVE-2024-0001", "severity": "Critical", "fix": { "versions": ["3.0.4"], "state": "fixed" } },
+      "artifact": { "name": "flask", "version": "3.0.3" }
+    },
+    {
+      "vulnerability": { "id": "CVE-2024-0002", "severity": "High", "fix": { "versions": [], "state": "unknown" } },
+      "artifact": { "name": "requests", "version": "2.32.0" }
+    },
+    {
+      "vulnerability": { "id": "CVE-2023-0003", "severity": "Medium", "fix": { "versions": ["22.0.1"], "state": "fixed" } },
+      "artifact": { "name": "gunicorn", "version": "22.0.0" }
+    }
+  ]
+}

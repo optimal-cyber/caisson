@@ -5,10 +5,15 @@ import (
 
 	"github.com/optimal-cyber/caisson/internal/deploy"
 	"github.com/optimal-cyber/caisson/internal/pkgformat"
+	"github.com/optimal-cyber/caisson/internal/vuln"
 	"github.com/spf13/cobra"
 )
 
-var evidenceExport bool
+var (
+	evidenceExport   bool
+	denySeverity     string
+	requireSignature bool
+)
 
 // deployCmd is the top-level convenience form: `caisson deploy my-app.caisson`.
 // It shares its behavior with `caisson package deploy`.
@@ -71,6 +76,14 @@ func runDeploy(c *cobra.Command, args []string) error {
 		note(c, "  ✗ SIGNATURE INVALID — refusing to deploy")
 		return fmt.Errorf("deploy: signature verification failed for %s", path)
 	}
+	if m.Scan != nil {
+		note(c, "  · vulnerability scan (%s): %d findings [%s]", m.Scan.Source, m.Scan.Total, joinComma(scanSummary(m.Scan.Counts)))
+	}
+
+	// Policy gate: refuse the deploy if declared policy is not met.
+	if fail := policyGate(c, m, sr); fail != nil {
+		return fail
+	}
 	note(c, "  · found %d kubernetes manifest(s) in payload", len(workloads))
 	for _, w := range workloads {
 		note(c, "      - %s", w)
@@ -80,6 +93,35 @@ func runDeploy(c *cobra.Command, args []string) error {
 	if evidenceExport {
 		note(c, "  [not implemented] would export the evidence bundle on arrival")
 	}
+	return nil
+}
+
+// policyGate enforces --require-signature and --deny-severity. It returns a
+// non-nil error (which aborts the deploy) when the vault violates policy.
+func policyGate(c *cobra.Command, m *pkgformat.Manifest, sr *pkgformat.SignatureResult) error {
+	if denySeverity == "" && !requireSignature {
+		return nil
+	}
+	var violations []string
+	if requireSignature && (!sr.Present || !sr.Valid) {
+		violations = append(violations, "vault is unsigned or the signature is invalid (--require-signature)")
+	}
+	if denySeverity != "" {
+		min := vuln.ParseSeverity(denySeverity)
+		if m.Scan == nil {
+			violations = append(violations, fmt.Sprintf("no vulnerability scan attached; cannot evaluate --deny-severity %s (fail-closed)", denySeverity))
+		} else if n := vuln.CountAtLeastIn(m.Scan.Counts, min); n > 0 {
+			violations = append(violations, fmt.Sprintf("%d finding(s) at or above %q (--deny-severity)", n, min))
+		}
+	}
+	if len(violations) > 0 {
+		note(c, "\n  ✗ POLICY GATE FAILED — refusing to deploy:")
+		for _, v := range violations {
+			note(c, "      - %s", v)
+		}
+		return fmt.Errorf("deploy: policy gate failed for %s", m.Filename())
+	}
+	note(c, "  ✓ policy gate passed")
 	return nil
 }
 
@@ -99,6 +141,13 @@ func provNote(sr *pkgformat.SignatureResult) string {
 			parts = append(parts, "SBOM attestation INVALID")
 		}
 	}
+	if sr.VulnAttestationPresent {
+		if sr.VulnAttestationValid {
+			parts = append(parts, "vuln attestation valid")
+		} else {
+			parts = append(parts, "vuln attestation INVALID")
+		}
+	}
 	if len(parts) == 0 {
 		return ""
 	}
@@ -106,6 +155,9 @@ func provNote(sr *pkgformat.SignatureResult) string {
 }
 
 func init() {
-	deployCmd.Flags().BoolVar(&evidenceExport, "evidence-export", false, "export the assessment evidence bundle on arrival")
-	packageDeployCmd.Flags().BoolVar(&evidenceExport, "evidence-export", false, "export the assessment evidence bundle on arrival")
+	for _, cmd := range []*cobra.Command{deployCmd, packageDeployCmd} {
+		cmd.Flags().BoolVar(&evidenceExport, "evidence-export", false, "export the assessment evidence bundle on arrival")
+		cmd.Flags().StringVar(&denySeverity, "deny-severity", "", "refuse deploy if the scan has findings at/above this severity (critical|high|medium|low)")
+		cmd.Flags().BoolVar(&requireSignature, "require-signature", false, "refuse deploy unless the vault is validly signed")
+	}
 }

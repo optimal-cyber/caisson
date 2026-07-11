@@ -90,13 +90,21 @@ func runVerify(c *cobra.Command, args []string) error {
 				note(c, "  ✗ sbom        CycloneDX attestation signature INVALID")
 			}
 		}
+		if sr.VulnAttestationPresent {
+			if sr.VulnAttestationValid {
+				note(c, "  ✓ vuln        scan attestation signature valid")
+			} else {
+				note(c, "  ✗ vuln        scan attestation signature INVALID")
+			}
+		}
 	}
 
 	failed := !sealOK ||
 		(sr.Present && !sr.Valid) ||
 		(sr.IdentityMatch != nil && !*sr.IdentityMatch) ||
 		(sr.ProvenancePresent && !sr.ProvenanceValid) ||
-		(sr.SBOMAttestationPresent && !sr.SBOMAttestationValid)
+		(sr.SBOMAttestationPresent && !sr.SBOMAttestationValid) ||
+		(sr.VulnAttestationPresent && !sr.VulnAttestationValid)
 	if failed {
 		return fmt.Errorf("verify: verification failed for %s", path)
 	}

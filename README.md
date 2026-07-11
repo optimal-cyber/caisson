@@ -78,10 +78,14 @@ go build -o caisson .
 ./caisson sbom view hello-app.caisson
 ./caisson sbom export hello-app.caisson --out ./evidence   # → ./evidence/hello-app.cdx.json
 
-# 4. DEPLOY — verifies the payload digest against the sealed manifest first.
-#    A tampered vault is refused (non-zero exit); registry push + k8s apply
-#    are described but not yet executed.
-./caisson deploy hello-app.caisson --evidence-export
+# 3b. (optional) embed a vulnerability scan you produced (grype/trivy JSON):
+#     ./caisson package create ./examples/hello-app --key caisson.key \
+#         --scan-report examples/hello-app-scan.grype.json
+
+# 4. DEPLOY — verifies seal + signature, then enforces a policy gate. A tampered,
+#    badly-signed, or policy-violating vault is refused (non-zero exit); the
+#    registry push + k8s apply are described but not yet executed.
+./caisson deploy hello-app.caisson --require-signature --deny-severity critical --evidence-export
 
 # 5. export a real evidence bundle to disk, derived from the vault's actual
 #    digest + inventory (JSON + OSCAL-aligned + Markdown report)
@@ -100,13 +104,16 @@ embedded **CycloneDX 1.6 SBOM** (dependencies detected from go.mod / package.jso
 requirements.txt / Dockerfile), and — with `--key` — an **Ed25519 signature** plus
 **DSSE-wrapped SLSA provenance and CycloneDX SBOM attestations**; `package inspect`,
 `sbom view`, and `sbom export` read them back; `verify` and `deploy` check the seal,
-signature, identity, provenance, and SBOM attestation and **refuse a tampered or
-badly-signed vault** (non-zero exit); and `evidence export` writes a real bundle to disk
-(native JSON, an OSCAL-aligned assessment-results file, and a Markdown report) whose control
-mapping reflects the artifact's actual state — e.g. `SR-11` flips to *satisfied* once signed,
-and `CM-8`/`SA-12` cite the real SBOM component count. Still placeholder (clearly marked in
-output): Sigstore/cosign keyless interop, deeper SBOM resolution (Syft), vulnerability scans
-feeding `RA-5`, schema-validated OSCAL, and the actual registry push / Kubernetes apply.
+signature, identity, provenance, and SBOM/vuln attestations and **refuse a tampered,
+badly-signed, or policy-violating vault** (non-zero exit); `package create --scan-report`
+ingests a Grype/Trivy scan, seals it, and DSSE-attests it, and `deploy --deny-severity` /
+`--require-signature` enforce a policy gate; and `evidence export` writes a real bundle to
+disk (native JSON, an OSCAL-aligned assessment-results file, and a Markdown report) whose
+control mapping reflects the artifact's actual state — e.g. `SR-11` flips to *satisfied* once
+signed, `CM-8`/`SA-12` cite the real SBOM component count, and `RA-5` flips to *satisfied*
+once a scan is attached. Still placeholder (clearly marked in output): Sigstore/cosign
+keyless interop, deeper SBOM resolution (Syft), running a scanner (bring your own report),
+schema-validated OSCAL, and the actual registry push / Kubernetes apply.
 
 ### Test it locally
 

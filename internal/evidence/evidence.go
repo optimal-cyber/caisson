@@ -119,11 +119,7 @@ func Collect(m *pkgformat.Manifest, now time.Time) *Bundle {
 			Evidence:  []string{"manifest.json", digestRef, sbomRef},
 		},
 		componentAuthenticity(m, digestRef),
-		{
-			ID: "RA-5", Title: "Vulnerability Monitoring and Scanning", Framework: NIST80053,
-			Status:    Planned,
-			Rationale: "No vulnerability scan is attached to this vault yet; scanner integration is planned.",
-		},
+		vulnControl(m),
 		{
 			ID: "AC-4", Title: "Information Flow Enforcement", Framework: CMMC,
 			Status:    Inherited,
@@ -144,6 +140,33 @@ func Collect(m *pkgformat.Manifest, now time.Time) *Bundle {
 		Controls:   controls,
 		Inventory:  inv,
 	}
+}
+
+// vulnControl reflects whether a vulnerability scan is sealed in the vault.
+func vulnControl(m *pkgformat.Manifest) Control {
+	c := Control{ID: "RA-5", Title: "Vulnerability Monitoring and Scanning", Framework: NIST80053}
+	if m.Scan == nil {
+		c.Status = Planned
+		c.Rationale = "No vulnerability scan is attached to this vault; attach one with --scan-report to satisfy this control and enable deploy-time policy gates."
+		return c
+	}
+	c.Status = Satisfied
+	c.Rationale = fmt.Sprintf("A %s vulnerability scan is sealed in the vault (%d findings: %s), enabling policy gates at deploy time.", m.Scan.Source, m.Scan.Total, summarizeCounts(m.Scan.Counts))
+	c.Evidence = []string{fmt.Sprintf("%s scan report (scan.json)", m.Scan.Source)}
+	return c
+}
+
+func summarizeCounts(counts map[string]int) string {
+	var parts []string
+	for _, sev := range []string{"critical", "high", "medium", "low", "negligible", "unknown"} {
+		if n := counts[sev]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", n, sev))
+		}
+	}
+	if len(parts) == 0 {
+		return "0 findings"
+	}
+	return strings.Join(parts, ", ")
 }
 
 // componentAuthenticity reflects the vault's real signing state honestly.
