@@ -24,6 +24,8 @@ demo: build ## Generate a key, sign+pack the sample app, verify, and read it bac
 	@echo "\n== sbom export ==" && ./$(BIN) sbom export hello-app.caisson --out ./evidence
 	@echo "\n== deploy (policy gate: no criticals) ==" && ./$(BIN) deploy hello-app.caisson --deny-severity critical --require-signature --evidence-export
 	@echo "\n== evidence export ==" && ./$(BIN) evidence export hello-app.caisson --out ./evidence
+	@echo "\n== attest export (cosign-compatible DSSE) ==" && ./$(BIN) attest export hello-app.caisson --out ./evidence
+	@echo "\n== attest verify (offline, no cosign) ==" && ./$(BIN) attest verify ./evidence/hello-app/provenance.dsse.json --key caisson-demo.pub
 
 demo-pull: build ## Like demo, but ALSO pulls declared images into a sealed OCI layout (needs a reachable registry + creds)
 	@echo "== key gen ==" && ./$(BIN) key gen --out caisson-demo

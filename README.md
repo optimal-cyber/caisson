@@ -131,7 +131,9 @@ standard gzip+tar
 embedded **CycloneDX SBOM** (native detection from go.mod / package.json /
 requirements.txt / Dockerfile, or `--syft` to wrap **Anchore Syft** for deep resolution —
 transitive deps, OS packages, licenses), and — with `--key` — an **Ed25519 signature** plus
-**DSSE-wrapped SLSA provenance and CycloneDX SBOM attestations**; `package inspect`,
+**DSSE-wrapped SLSA provenance and CycloneDX SBOM attestations** in standard, **cosign-compatible**
+format (in-toto v1 over the DSSE PAE) that `attest export` lifts out with the public key and
+`attest verify` checks offline with no cosign needed; `package inspect`,
 `sbom view`, and `sbom export` read them back; `verify` and `deploy` check the seal,
 signature, identity, provenance, and SBOM/vuln attestations and **refuse a tampered,
 badly-signed, or policy-violating vault** (non-zero exit); `package create --scan-report`
@@ -150,8 +152,11 @@ published OSCAL 1.1.2 schema** (bundled, offline) before it's written; and `depl
 performs the real delivery — pushing the sealed images to the target registry
 (go-containerregistry) and applying the workloads with `kubectl` — behind the seal, signature,
 and policy gate, needing a reachable registry and cluster with credentials (without `--apply` it
-prints the plan). Still placeholder (clearly marked in output): Sigstore/cosign keyless interop,
-running a scanner (bring your own report), and Helm-based applies.
+prints the plan). Out of scope **by design** (not a TODO): Sigstore **keyless** signing
+(Fulcio/Rekor need an online identity provider + transparency log, which the airgap forbids) —
+Caisson stays key-based so signing and verification both work disconnected, while the envelopes
+remain cosign-verifiable. Still placeholder (clearly marked in output): running a scanner
+(bring your own report), and Helm-based applies.
 
 ### Test it locally
 

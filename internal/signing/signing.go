@@ -3,10 +3,13 @@
 // attestations can be signed with the same key. Standard-library crypto only —
 // no external signing service required, so it works fully disconnected.
 //
-// This is Caisson-native signing. Sigstore/cosign interoperability (keyless
-// Fulcio/Rekor, transparency logs) is a documented follow-on; the on-disk
-// formats chosen here (PKCS#8/PKIX PEM keys, DSSE envelopes, in-toto statements)
-// are deliberately standard so that migration stays clean.
+// The formats are deliberately standard and cosign-compatible: PKCS#8/PKIX PEM
+// keys, DSSE envelopes (payloadType application/vnd.in-toto+json, signatures over
+// the DSSE PAE), and in-toto v1 statements. So the envelopes verify with cosign
+// (key-based) and any DSSE/in-toto tooling — see `caisson attest export/verify`.
+// Keyless signing (Sigstore Fulcio/Rekor, transparency logs) is intentionally out
+// of scope: it needs an online identity provider and log, which the airgap
+// forbids, so Caisson stays key-based and fully disconnected.
 package signing
 
 import (

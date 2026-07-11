@@ -1,6 +1,7 @@
 package pkgformat
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/optimal-cyber/caisson/internal/oci"
 	"github.com/optimal-cyber/caisson/internal/signing"
+	"github.com/optimal-cyber/caisson/internal/vuln"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	v1random "github.com/google/go-containerregistry/pkg/v1/random"
@@ -340,6 +342,57 @@ func TestExtractPayloadFiles(t *testing.T) {
 	// A file not in the payload is an error.
 	if _, err := ExtractPayloadFiles(out, dest, []string{"k8s/missing.yaml"}); err == nil {
 		t.Error("expected an error extracting a file not in the payload")
+	}
+}
+
+func TestReadAttestationsAndPublicKey(t *testing.T) {
+	src := t.TempDir()
+	writeTmp(t, src, "app/server.py", "print('hi')\n")
+
+	key, err := signing.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer inDir(t, t.TempDir())()
+	scan := &vuln.Report{Source: "grype", Findings: []vuln.Finding{{ID: "CVE-1", Severity: vuln.High}}}
+	_, out, err := Create(src, CreateOptions{Name: "demo", Version: "1.0.0", Signer: key, Scan: scan})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	atts, err := ReadAttestations(out)
+	if err != nil {
+		t.Fatalf("ReadAttestations: %v", err)
+	}
+	kinds := map[string]bool{}
+	for _, a := range atts {
+		kinds[a.Kind] = true
+		// Each envelope is a DSSE envelope that verifies with the signing key.
+		var env signing.Envelope
+		if err := json.Unmarshal(a.Envelope, &env); err != nil {
+			t.Fatalf("%s envelope is not JSON: %v", a.Kind, err)
+		}
+		if _, ok := key.VerifyDSSE(&env); !ok {
+			t.Errorf("%s envelope did not verify against the signing key", a.Kind)
+		}
+	}
+	for _, want := range []string{"provenance", "sbom", "vuln"} {
+		if !kinds[want] {
+			t.Errorf("missing %s attestation", want)
+		}
+	}
+
+	// The exported public key parses and matches the signer.
+	pubPEM, ok, err := SignerPublicKeyPEM(out)
+	if err != nil || !ok {
+		t.Fatalf("SignerPublicKeyPEM ok=%t err=%v", ok, err)
+	}
+	loaded, err := signing.LoadPublic(pubPEM)
+	if err != nil {
+		t.Fatalf("exported public key did not parse: %v", err)
+	}
+	if loaded.KeyID() != key.KeyID() {
+		t.Error("exported public key does not match the signer")
 	}
 }
 
