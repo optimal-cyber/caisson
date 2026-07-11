@@ -81,6 +81,49 @@ func TestExportWritesRealFiles(t *testing.T) {
 	}
 }
 
+func oscalJSONFor(t *testing.T, m *pkgformat.Manifest) []byte {
+	t.Helper()
+	data, err := marshal(oscalFrom(Collect(m, time.Unix(0, 0))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+func TestOSCALValidatesAgainstNISTSchema(t *testing.T) {
+	cases := map[string]*pkgformat.Manifest{
+		"unsigned": sampleManifest(false),
+		"signed":   sampleManifest(true),
+	}
+	withScan := sampleManifest(true)
+	withScan.Scan = &pkgformat.ScanRef{Source: "grype", Total: 3, Counts: map[string]int{"high": 1, "medium": 1, "low": 1}}
+	cases["signed+scan"] = withScan
+
+	for name, m := range cases {
+		if err := ValidateOSCAL(oscalJSONFor(t, m)); err != nil {
+			t.Errorf("%s: generated OSCAL failed NIST schema validation: %v", name, err)
+		}
+	}
+}
+
+func TestValidateOSCALRejectsInvalid(t *testing.T) {
+	var doc map[string]any
+	if err := json.Unmarshal(oscalJSONFor(t, sampleManifest(true)), &doc); err != nil {
+		t.Fatal(err)
+	}
+	// Drop the required reviewed-controls from the first result.
+	ar := doc["assessment-results"].(map[string]any)
+	res0 := ar["results"].([]any)[0].(map[string]any)
+	delete(res0, "reviewed-controls")
+	broken, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateOSCAL(broken); err == nil {
+		t.Error("expected schema validation to reject a result missing reviewed-controls")
+	}
+}
+
 func statusOf(b *Bundle, id string) ControlStatus {
 	for _, c := range b.Controls {
 		if c.ID == id {

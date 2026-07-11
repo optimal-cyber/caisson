@@ -29,9 +29,9 @@ artifact's real content digest and inventory:
   <out>/<name>/evidence.md                     human-readable report
 
 The control mapping is rule-based and reflects real state (for example, the
-signing control stays "partial" until cosign signing lands). The OSCAL output is
-OSCAL-aligned, not schema-validated. This is evidence to support an assessment —
-not an ATO.`,
+signing control stays "partial" until cosign signing lands). The OSCAL
+assessment-results file is validated against NIST's published OSCAL schema
+before it is written. This is evidence to support an assessment — not an ATO.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(c *cobra.Command, args []string) error {
 		path := args[0]
@@ -60,7 +60,8 @@ not an ATO.`,
 		for _, w := range written {
 			note(c, "    %s", w)
 		}
-		note(c, "\n  (rule-based mapping · OSCAL-aligned, not schema-validated · not an ATO)")
+		note(c, "  ✓ OSCAL assessment-results validated against NIST OSCAL %s schema", evidence.OSCALVersion)
+		note(c, "\n  (rule-based mapping · schema-validated OSCAL %s · not an ATO)", evidence.OSCALVersion)
 		return nil
 	},
 }

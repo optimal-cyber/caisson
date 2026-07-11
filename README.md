@@ -113,7 +113,7 @@ go build -o caisson .
 #         --registry reg.enclave:5000 --namespace prod
 
 # 5. export a real evidence bundle to disk, derived from the vault's actual
-#    digest + inventory (JSON + OSCAL-aligned + Markdown report)
+#    digest + inventory (JSON + schema-validated OSCAL + Markdown report)
 ./caisson evidence export hello-app.caisson --out ./evidence
 #   → ./evidence/hello-app/{evidence.json, oscal-assessment-results.json, evidence.md}
 
@@ -144,12 +144,13 @@ offline; and `evidence export` writes a real bundle to
 disk (native JSON, an OSCAL-aligned assessment-results file, and a Markdown report) whose
 control mapping reflects the artifact's actual state — e.g. `SR-11` flips to *satisfied* once
 signed, `CM-8`/`SA-12` cite the real SBOM component count, and `RA-5` flips to *satisfied*
-once a scan is attached; and `deploy --apply` performs the real delivery — pushing the
-sealed images to the target registry (go-containerregistry) and applying the workloads with
-`kubectl` — behind the seal, signature, and policy gate, needing a reachable registry and
-cluster with credentials (without `--apply` it prints the plan). Still placeholder (clearly
-marked in output): Sigstore/cosign keyless interop, deeper SBOM resolution (Syft), running a
-scanner (bring your own report), schema-validated OSCAL, and Helm-based applies.
+once a scan is attached, and the OSCAL assessment-results file is **validated against NIST's
+published OSCAL 1.1.2 schema** (bundled, offline) before it's written; and `deploy --apply`
+performs the real delivery — pushing the sealed images to the target registry
+(go-containerregistry) and applying the workloads with `kubectl` — behind the seal, signature,
+and policy gate, needing a reachable registry and cluster with credentials (without `--apply` it
+prints the plan). Still placeholder (clearly marked in output): Sigstore/cosign keyless interop,
+deeper SBOM resolution (Syft), running a scanner (bring your own report), and Helm-based applies.
 
 ### Test it locally
 

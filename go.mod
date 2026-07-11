@@ -4,6 +4,7 @@ go 1.22
 
 require (
 	github.com/google/go-containerregistry v0.20.2
+	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/spf13/cobra v1.8.1
 	gopkg.in/yaml.v3 v3.0.1
 )

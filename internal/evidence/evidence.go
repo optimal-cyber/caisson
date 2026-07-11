@@ -5,10 +5,10 @@
 //
 // The control mapping is rule-based — computed from what the vault actually
 // carries, reflecting real state (e.g. the signing control is only "partial"
-// while the manifest is unsigned). It is not a full assessment engine, the OSCAL
-// output is OSCAL-aligned rather than schema-validated, and none of this is an
-// ATO. Deeper evaluation (e.g. vulnerability scan results feeding RA-5) arrives
-// with later milestones. Standard-library only, so it runs disconnected.
+// while the manifest is unsigned). It is not a full assessment engine and none
+// of this is an ATO, but the OSCAL assessment-results output is validated
+// against NIST's published OSCAL schema (see oscal_validate.go) before it is
+// written. Validation runs fully offline against the bundled schema.
 package evidence
 
 import (
@@ -208,6 +208,11 @@ func Export(b *Bundle, outDir string) ([]string, error) {
 	if err != nil {
 		return written, err
 	}
+	// Fail closed: never write an OSCAL file that doesn't validate against the
+	// bundled NIST schema.
+	if err := ValidateOSCAL(oscalJSON); err != nil {
+		return written, err
+	}
 	p, err = writeOut(dir, "oscal-assessment-results.json", oscalJSON)
 	if err != nil {
 		return written, err
@@ -270,7 +275,7 @@ func renderMarkdown(b *Bundle) string {
 	}
 
 	s.WriteString("\n---\n\n")
-	s.WriteString("_Control mapping is rule-based, derived from the sealed artifact. The OSCAL output is OSCAL-aligned, not schema-validated. This is evidence to support an assessment — not an ATO._\n")
+	fmt.Fprintf(&s, "_Control mapping is rule-based, derived from the sealed artifact. The OSCAL assessment-results file is validated against NIST's OSCAL %s schema. This is evidence to support an assessment — not an ATO._\n", OSCALVersion)
 	return s.String()
 }
 
@@ -282,11 +287,11 @@ func frameworksList(fw []Framework) string {
 	return strings.Join(parts, ", ")
 }
 
-// --- OSCAL-aligned assessment-results (subset) ---------------------------------
+// --- OSCAL assessment-results --------------------------------------------------
 //
-// Structurally shaped after OSCAL assessment-results; a starting point, not a
-// schema-validated OSCAL document. UUIDs are derived deterministically from the
-// content digest so output is reproducible.
+// An OSCAL assessment-results document that validates against NIST's published
+// schema (see oscal_validate.go). UUIDs are derived deterministically from the
+// content digest so output is reproducible for the same artifact.
 
 type oscalDoc struct {
 	AssessmentResults oscalAR `json:"assessment-results"`
@@ -311,13 +316,24 @@ type oscalHref struct {
 }
 
 type oscalResult struct {
-	UUID         string         `json:"uuid"`
-	Title        string         `json:"title"`
-	Description  string         `json:"description"`
-	Start        string         `json:"start"`
-	Observations []oscalObs     `json:"observations"`
-	Findings     []oscalFinding `json:"findings"`
+	UUID             string                `json:"uuid"`
+	Title            string                `json:"title"`
+	Description      string                `json:"description"`
+	Start            string                `json:"start"`
+	ReviewedControls oscalReviewedControls `json:"reviewed-controls"`
+	Observations     []oscalObs            `json:"observations"`
+	Findings         []oscalFinding        `json:"findings"`
 }
+
+type oscalReviewedControls struct {
+	ControlSelections []oscalControlSelection `json:"control-selections"`
+}
+
+type oscalControlSelection struct {
+	IncludeAll *oscalIncludeAll `json:"include-all,omitempty"`
+}
+
+type oscalIncludeAll struct{}
 
 type oscalObs struct {
 	UUID             string          `json:"uuid"`
@@ -378,17 +394,20 @@ func oscalFrom(b *Bundle) oscalDoc {
 		AssessmentResults: oscalAR{
 			UUID: detUUID("ar:" + b.Artifact.Digest),
 			Metadata: oscalMeta{
-				Title:        fmt.Sprintf("Caisson evidence — %s v%s (OSCAL-aligned)", b.Artifact.Name, b.Artifact.Version),
+				Title:        fmt.Sprintf("Caisson evidence — %s v%s (OSCAL %s)", b.Artifact.Name, b.Artifact.Version, OSCALVersion),
 				LastModified: b.Generated,
 				Version:      b.Artifact.Version,
-				OSCALVersion: "1.1.2",
+				OSCALVersion: OSCALVersion,
 			},
 			ImportAP: oscalHref{Href: "caisson://sealed-manifest/" + b.Artifact.Digest},
 			Results: []oscalResult{{
-				UUID:         detUUID("result:" + b.Artifact.Digest),
-				Title:        "Sealed-artifact control mapping",
-				Description:  "Rule-based control satisfaction derived from the sealed Caisson vault.",
-				Start:        b.Generated,
+				UUID:        detUUID("result:" + b.Artifact.Digest),
+				Title:       "Sealed-artifact control mapping",
+				Description: "Rule-based control satisfaction derived from the sealed Caisson vault.",
+				Start:       b.Generated,
+				ReviewedControls: oscalReviewedControls{
+					ControlSelections: []oscalControlSelection{{IncludeAll: &oscalIncludeAll{}}},
+				},
 				Observations: obs,
 				Findings:     findings,
 			}},
