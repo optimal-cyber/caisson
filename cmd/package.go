@@ -29,6 +29,7 @@ var (
 	createConfig     string
 	createPullImages bool
 	createSyft       bool
+	createScanner    string
 )
 
 var packageCreateCmd = &cobra.Command{
@@ -94,15 +95,22 @@ func runPackageCreate(c *cobra.Command, args []string) error {
 	}
 
 	var scan *vuln.Report
-	if createScan != "" {
+	switch {
+	case createScan != "":
 		data, err := os.ReadFile(createScan)
 		if err != nil {
 			return err
 		}
-		scan, err = vuln.Parse(data)
+		if scan, err = vuln.Parse(data); err != nil {
+			return err
+		}
+	case createScanner != "":
+		note(c, "package create: running %s against %q… (needs %s on PATH + its DB)", createScanner, src, createScanner)
+		s, err := vuln.Run(createScanner, src)
 		if err != nil {
 			return err
 		}
+		scan = s
 	}
 
 	// Optionally pull the declared images into an OCI layout sealed inside the
@@ -259,6 +267,7 @@ func init() {
 	packageCreateCmd.Flags().StringVar(&createVersion, "version", "", "package version (default: 0.0.0)")
 	packageCreateCmd.Flags().StringVar(&createKey, "key", "", "Ed25519 private key (PEM) to sign the vault and attest provenance")
 	packageCreateCmd.Flags().StringVar(&createScan, "scan-report", "", "Grype/Trivy JSON scan report to embed and attest")
+	packageCreateCmd.Flags().StringVar(&createScanner, "scan", "", "run a scanner on the source and embed its result: grype|trivy (needs the scanner on PATH)")
 	packageCreateCmd.Flags().StringVar(&createConfig, "config", "", "path to a caisson.yaml (default: caisson.yaml in the source or working directory)")
 	packageCreateCmd.Flags().BoolVar(&createPullImages, "pull-images", false, "pull declared images into a sealed OCI layout (needs registry access)")
 	packageCreateCmd.Flags().BoolVar(&createSyft, "syft", false, "generate the SBOM with Anchore Syft for deep resolution (needs syft on PATH); default is native detection")

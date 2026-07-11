@@ -137,7 +137,8 @@ format (in-toto v1 over the DSSE PAE) that `attest export` lifts out with the pu
 `sbom view`, and `sbom export` read them back; `verify` and `deploy` check the seal,
 signature, identity, provenance, and SBOM/vuln attestations and **refuse a tampered,
 badly-signed, or policy-violating vault** (non-zero exit); `package create --scan-report`
-ingests a Grype/Trivy scan, seals it, and DSSE-attests it, and `deploy --deny-severity` /
+ingests a Grype/Trivy scan you produced (or `--scan grype|trivy` runs the scanner for you),
+seals it, and DSSE-attests it, and `deploy --deny-severity` /
 `--require-signature` enforce a policy gate; `package create --pull-images` fetches the
 declared container images into an **OCI image layout sealed inside the vault** (via
 go-containerregistry), records each image's content digest in the signed manifest, and
@@ -155,8 +156,7 @@ and policy gate, needing a reachable registry and cluster with credentials (with
 prints the plan). Out of scope **by design** (not a TODO): Sigstore **keyless** signing
 (Fulcio/Rekor need an online identity provider + transparency log, which the airgap forbids) —
 Caisson stays key-based so signing and verification both work disconnected, while the envelopes
-remain cosign-verifiable. Still placeholder (clearly marked in output): running a scanner
-(bring your own report), and Helm-based applies.
+remain cosign-verifiable. Still placeholder (clearly marked in output): Helm-based applies.
 
 ### Test it locally
 
