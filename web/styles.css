@@ -120,6 +120,7 @@ em { color: var(--gold-light); font-style: normal; }
 .hero-foot { margin: 26px 0 0; font-size: 13px; color: var(--muted-steel); }
 .hero-art img {
   width: 100%; height: auto; max-width: 460px; margin-inline: auto; display: block;
+  border-radius: 20px; border: 1px solid #1c2748;
   filter: drop-shadow(0 26px 60px rgba(6,9,18,0.7));
 }
 

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 200" width="760" height="200" role="img" aria-label="Caisson logo: airgap-seal emblem with CAISSON wordmark and the tagline Sealed at the source, evidence on arrival">
+  <title>Caisson — horizontal logo lockup</title>
+  <defs>
+    <linearGradient id="lh-steel" x1="0" y1="0" x2="0.25" y2="1">
+      <stop offset="0" stop-color="#DCE4F2"/><stop offset="0.5" stop-color="#AEB9D6"/><stop offset="1" stop-color="#7987AD"/>
+    </linearGradient>
+    <linearGradient id="lh-face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#28324F"/><stop offset="1" stop-color="#141B33"/>
+    </linearGradient>
+    <radialGradient id="lh-gold" cx="0.42" cy="0.35" r="0.8">
+      <stop offset="0" stop-color="#FFE29A"/><stop offset="0.5" stop-color="#F4B23C"/><stop offset="1" stop-color="#B9781E"/>
+    </radialGradient>
+    <filter id="lh-glow" x="-70%" y="-70%" width="240%" height="240%">
+      <feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- ===== emblem ===== -->
+  <g transform="translate(6,20) scale(0.8)">
+    <line x1="100" y1="40" x2="100" y2="160" stroke="#37E1D6" stroke-width="4" stroke-linecap="round" opacity="0.9" filter="url(#lh-glow)"/>
+    <polygon points="22,62 36,44 72,44 72,156 36,156 22,138" fill="url(#lh-steel)" stroke="#0A1020" stroke-width="4" stroke-linejoin="round"/>
+    <rect x="36" y="58" width="26" height="84" rx="6" fill="url(#lh-face)"/>
+    <g fill="#F4B23C"><circle cx="29" cy="76" r="2.6"/><circle cx="29" cy="124" r="2.6"/></g>
+    <polygon points="178,62 164,44 128,44 128,156 164,156 178,138" fill="url(#lh-steel)" stroke="#0A1020" stroke-width="4" stroke-linejoin="round"/>
+    <rect x="138" y="58" width="26" height="84" rx="6" fill="url(#lh-face)"/>
+    <g fill="#F4B23C"><circle cx="171" cy="76" r="2.6"/><circle cx="171" cy="124" r="2.6"/></g>
+    <path d="M108,66 L134,92 Q142,100 134,108 L108,134 Q100,142 92,134 L66,108 Q58,100 66,92 L92,66 Q100,58 108,66 Z" fill="url(#lh-gold)" stroke="#0A1020" stroke-width="4" stroke-linejoin="round"/>
+    <polygon points="100,64 80,84 90,94 100,84" fill="#FFEFC2" opacity="0.55"/>
+    <g filter="url(#lh-glow)" fill="#7FF5EE"><circle cx="66" cy="100" r="3.6"/><circle cx="134" cy="100" r="3.6"/></g>
+  </g>
+
+  <!-- ===== wordmark + tagline ===== -->
+  <text x="205" y="108" font-family="'Arial Black','Helvetica Neue',Impact,sans-serif" font-weight="900" font-size="72" letter-spacing="7" fill="#E7ECF7">CAISSON</text>
+  <line x1="207" y1="128" x2="694" y2="128" stroke="#263156" stroke-width="2"/>
+  <text x="208" y="150" font-family="'Helvetica Neue',Arial,sans-serif" font-weight="700" font-size="15.5" letter-spacing="3" fill="#37E1D6">SEALED AT THE SOURCE · EVIDENCE ON ARRIVAL</text>
+</svg>

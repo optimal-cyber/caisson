@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="brand/caisson-vault-logomark.svg" width="128" height="128" alt="Caisson vault emblem"/>
+  <img src="brand/caisson-mascot.jpg" width="460" alt="Caisson — otter mascot poster with the CAISSON wordmark; Airgap. Secure. Simple."/>
 </p>
 
 <h1 align="center">Caisson</h1>

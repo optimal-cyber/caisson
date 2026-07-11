@@ -86,9 +86,13 @@ old magenta so the sunset reads 80s, not unicorn.
 ---
 
 ## Marks
-- **Primary — Vault emblem** (`caisson-vault-logomark.svg`): the hexagonal vault face —
-  six seams to a central hex lock + gold seal + keyhole. Legible at 32px. Leads
-  everywhere: site nav, favicon, README, decks, CLI ASCII.
+> The marketing-facing marks (emblem, wordmark, favicon, social banner) are documented in
+> [`BRAND-KIT.md`](BRAND-KIT.md); this section covers the character marks.
+
+- **Primary — Emblem** (`caisson-vault-logomark.svg`): a sealed gold payload locked across the
+  airgap (a cyan seam) between two steel bulkhead doors — the product's job in one distinctive,
+  monochrome-strong mark. Legible at 16px. Leads everywhere: site nav, favicon, README, decks,
+  CLI. (The character's own hexagonal *vault prop* is separate lore — see below.)
 - **Secondary / community — Helm** (`caisson-helm-logomark.svg`): Caisson's helmeted head,
   cyan visor, hex crest. Discord/GitHub avatar, stickers.
 - **Full-body hero** (`caisson-hero.svg`): the "Seal" pose over a cosmic backdrop.
