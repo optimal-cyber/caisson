@@ -144,8 +144,8 @@ func componentAuthenticity(m *pkgformat.Manifest, digestRef string) Control {
 	c := Control{ID: "SR-11", Title: "Component Authenticity", Framework: NIST80053}
 	if m.Signed {
 		c.Status = Satisfied
-		c.Rationale = "The manifest is cryptographically signed; provenance is verifiable on arrival."
-		c.Evidence = []string{"seal signature", digestRef}
+		c.Rationale = "The manifest is cryptographically signed (Ed25519) and carries a DSSE-wrapped SLSA provenance attestation; authenticity and provenance are verifiable on arrival."
+		c.Evidence = []string{"Ed25519 manifest signature", "SLSA provenance attestation", digestRef}
 	} else {
 		c.Status = Partial
 		c.Rationale = "Integrity is protected by a content digest, but the manifest is not yet cryptographically signed (cosign integration pending)."

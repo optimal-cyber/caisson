@@ -56,10 +56,20 @@ travel sealed with the payload.
 # build
 go build -o caisson .
 
-# 1. SEAL a directory into a real .caisson vault (writes a file to disk)
-./caisson package create ./examples/hello-app --version 1.0.0
-#   ✓ packed 5 files · per-file SHA-256 recorded · content digest computed
+# 0. (optional) generate a signing keypair
+./caisson key gen --out caisson
+#   private → caisson.key   public → caisson.pub
+
+# 1. SEAL a directory into a real .caisson vault (writes a file to disk).
+#    With --key, the vault is Ed25519-signed and gets a SLSA provenance attestation.
+./caisson package create ./examples/hello-app --version 1.0.0 --key caisson.key
+#   ✓ packed 5 files · content digest computed
+#   ✓ signed (ed25519) · SLSA provenance attested
 #   vault → hello-app.caisson
+
+# 1b. VERIFY the seal, signature, and provenance (pin the trusted key)
+./caisson verify hello-app.caisson --key caisson.pub
+#   ✓ seal ✓ signature ✓ identity ✓ provenance
 
 # 2. INSPECT what a sealed vault carries (read-only)
 ./caisson package inspect hello-app.caisson
@@ -84,14 +94,16 @@ go build -o caisson .
 > `caisson deploy` is the convenience form of `caisson package deploy` — both do the same thing.
 
 **What's real vs. scaffold today.** Real work: `package create` writes a standard gzip+tar
-`.caisson` (open it with `tar -tzf`) with a per-file SHA-256 inventory and content digest;
-`package inspect` and `sbom view` read it back; `deploy` verifies the payload digest and
-**refuses a tampered vault** (non-zero exit); and `evidence export` writes a real bundle to
-disk (native JSON, an OSCAL-aligned assessment-results file, and a Markdown report) whose
-control mapping reflects the artifact's actual state — e.g. the signing control stays
-`partial` until cosign lands. Still placeholder (clearly marked in output): cosign signing,
-a full dependency SBOM (Syft), deeper control evaluation (e.g. vulnerability scans feeding
-RA-5) and schema-validated OSCAL, and the actual registry push / Kubernetes apply.
+`.caisson` (open it with `tar -tzf`) with a per-file SHA-256 inventory and content digest,
+and — with `--key` — an **Ed25519 signature** over the manifest plus a **DSSE-wrapped SLSA
+provenance attestation**; `package inspect` and `sbom view` read it back; `verify` and
+`deploy` check the seal, signature, identity, and provenance and **refuse a tampered or
+badly-signed vault** (non-zero exit); and `evidence export` writes a real bundle to disk
+(native JSON, an OSCAL-aligned assessment-results file, and a Markdown report) whose control
+mapping reflects the artifact's actual state — e.g. `SR-11` flips to *satisfied* once the
+vault is signed. Still placeholder (clearly marked in output): Sigstore/cosign keyless
+interop, a full dependency SBOM (Syft), vulnerability scans feeding `RA-5`, schema-validated
+OSCAL, and the actual registry push / Kubernetes apply.
 
 ### Test it locally
 

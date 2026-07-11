@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/optimal-cyber/caisson/internal/deploy"
+	"github.com/optimal-cyber/caisson/internal/pkgformat"
 	"github.com/spf13/cobra"
 )
 
@@ -40,6 +41,10 @@ func runDeploy(c *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	sr, err := pkgformat.VerifySignature(path, nil)
+	if err != nil {
+		return err
+	}
 
 	// Heuristic: treat sealed *.yaml/*.yml as Kubernetes workloads to apply.
 	var workloads []string
@@ -57,6 +62,15 @@ func runDeploy(c *cobra.Command, args []string) error {
 	}
 	note(c, "  ✓ seal verified · payload digest matches manifest")
 	note(c, "    %s", m.Digest)
+	switch {
+	case !sr.Present:
+		note(c, "  · unsigned vault (no signature to verify)")
+	case sr.Valid:
+		note(c, "  ✓ signature verified (keyId %s)%s", short(sr.KeyID), provNote(sr))
+	default:
+		note(c, "  ✗ SIGNATURE INVALID — refusing to deploy")
+		return fmt.Errorf("deploy: signature verification failed for %s", path)
+	}
 	note(c, "  · found %d kubernetes manifest(s) in payload", len(workloads))
 	for _, w := range workloads {
 		note(c, "      - %s", w)
@@ -67,6 +81,16 @@ func runDeploy(c *cobra.Command, args []string) error {
 		note(c, "  [not implemented] would export the evidence bundle on arrival")
 	}
 	return nil
+}
+
+func provNote(sr *pkgformat.SignatureResult) string {
+	if sr.ProvenancePresent && sr.ProvenanceValid {
+		return " · SLSA provenance valid"
+	}
+	if sr.ProvenancePresent {
+		return " · SLSA provenance INVALID"
+	}
+	return ""
 }
 
 func init() {

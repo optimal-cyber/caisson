@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"os"
+
 	"github.com/optimal-cyber/caisson/internal/pkgformat"
+	"github.com/optimal-cyber/caisson/internal/signing"
 	"github.com/spf13/cobra"
 )
 
@@ -15,6 +18,7 @@ var packageCmd = &cobra.Command{
 var (
 	createName    string
 	createVersion string
+	createKey     string
 )
 
 var packageCreateCmd = &cobra.Command{
@@ -31,9 +35,23 @@ inventory is file-level.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(c *cobra.Command, args []string) error {
 		src := args[0]
+
+		var signer *signing.Key
+		if createKey != "" {
+			pemBytes, err := os.ReadFile(createKey)
+			if err != nil {
+				return err
+			}
+			signer, err = signing.LoadPrivate(pemBytes)
+			if err != nil {
+				return err
+			}
+		}
+
 		m, out, err := pkgformat.Create(src, pkgformat.CreateOptions{
 			Name:    createName,
 			Version: createVersion,
+			Signer:  signer,
 		})
 		if err != nil {
 			return err
@@ -42,10 +60,18 @@ inventory is file-level.`,
 		note(c, "  ✓ packed %d files · %s", m.FileCount, humanSize(m.TotalSize))
 		note(c, "  ✓ per-file SHA-256 recorded · content digest computed")
 		note(c, "  ✓ manifest sealed (format %s)", m.FormatVersion)
-		note(c, "  · signing not yet implemented (signed=%t)", m.Signed)
+		if m.Signed {
+			note(c, "  ✓ signed (ed25519, keyId %s) · SLSA provenance attested", short(signer.KeyID()))
+		} else {
+			note(c, "  · unsigned (pass --key <caisson.key> to sign + attest)")
+		}
 		note(c, "\n  vault → %s   (%s v%s)", out, m.Name, m.Version)
 		note(c, "  digest  %s", m.Digest)
-		note(c, "\n  next:  caisson package inspect %s", out)
+		if m.Signed {
+			note(c, "\n  next:  caisson verify %s --key <public.pem>", out)
+		} else {
+			note(c, "\n  next:  caisson package inspect %s", out)
+		}
 		return nil
 	},
 }
@@ -78,5 +104,6 @@ var packageInspectCmd = &cobra.Command{
 func init() {
 	packageCreateCmd.Flags().StringVar(&createName, "name", "", "package name (default: source directory name)")
 	packageCreateCmd.Flags().StringVar(&createVersion, "version", "", "package version (default: 0.0.0)")
+	packageCreateCmd.Flags().StringVar(&createKey, "key", "", "Ed25519 private key (PEM) to sign the vault and attest provenance")
 	packageCmd.AddCommand(packageCreateCmd, packageInspectCmd, packageDeployCmd)
 }

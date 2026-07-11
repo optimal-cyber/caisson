@@ -9,13 +9,18 @@ caisson
 *.caisson
 /evidence/
 
+# Signing keys — never commit these
+*.key
+*.pub
+
 # Go workspace
 /vendor/
 go.work
 go.work.sum
 
-# Editor / OS cruft
+# Editor / OS / tooling cruft
 .DS_Store
 .idea/
 .vscode/
+.claude/
 *.swp
