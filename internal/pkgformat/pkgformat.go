@@ -1,13 +1,15 @@
 // Package pkgformat implements the ".caisson" vault: a gzip-compressed tar
 // archive that carries an application payload alongside a manifest recording a
-// per-file SHA-256 inventory and an overall content digest. Optionally the vault
-// is signed (Ed25519) and carries a DSSE-wrapped SLSA provenance attestation.
+// per-file SHA-256 inventory and an overall content digest. Every vault also
+// embeds a CycloneDX SBOM (bound to the signed manifest by digest); optionally
+// the vault is signed (Ed25519) and carries DSSE-wrapped SLSA provenance and
+// CycloneDX SBOM attestations.
 //
 // Create packs a directory into a vault on disk (signing it when a key is
-// given), Open reads the manifest back, Verify recomputes the payload digest,
-// and VerifySignature checks the signature and provenance. Standard-library only,
-// so it works in a disconnected environment. A full dependency SBOM (Syft) and
-// the registry/Kubernetes deploy are layered on in later milestones.
+// given), Open reads the manifest back, Verify recomputes the payload digest and
+// checks SBOM integrity, and VerifySignature checks the signature and
+// attestations. Standard-library only, so it works in a disconnected
+// environment.
 package pkgformat
 
 import (
@@ -27,6 +29,7 @@ import (
 	"time"
 
 	"github.com/optimal-cyber/caisson/internal/attest"
+	"github.com/optimal-cyber/caisson/internal/sbom"
 	"github.com/optimal-cyber/caisson/internal/signing"
 )
 
@@ -38,7 +41,9 @@ const (
 
 	manifestName   = "manifest.json"
 	signatureName  = "signature.json"
+	sbomFileName   = "sbom.cdx.json"
 	provenanceName = "attestations/provenance.dsse.json"
+	sbomAttName    = "attestations/sbom.dsse.json"
 	payloadPrefix  = "payload/"
 )
 
@@ -49,6 +54,15 @@ type FileEntry struct {
 	Mode   string `json:"mode"`
 	Type   string `json:"type"`
 	SHA256 string `json:"sha256"`
+}
+
+// SBOMRef records the SBOM embedded in the vault, bound to the signed manifest.
+type SBOMRef struct {
+	Format      string `json:"format"`
+	SpecVersion string `json:"specVersion"`
+	Path        string `json:"path"`
+	SHA256      string `json:"sha256"`
+	Components  int    `json:"components"`
 }
 
 // Manifest is the sealed metadata carried inside every vault (manifest.json).
@@ -62,6 +76,7 @@ type Manifest struct {
 	TotalSize     int64       `json:"totalSize"`
 	Digest        string      `json:"digest"`
 	Signed        bool        `json:"signed"`
+	SBOM          *SBOMRef    `json:"sbom,omitempty"`
 	Files         []FileEntry `json:"files"`
 }
 
@@ -82,7 +97,7 @@ type CreateOptions struct {
 	Name    string       // defaults to the source directory's base name
 	Version string       // defaults to "0.0.0"
 	Now     time.Time    // defaults to time.Now().UTC(); injectable for tests
-	Signer  *signing.Key // when set, the vault is signed and provenance-attested
+	Signer  *signing.Key // when set, the vault is signed and attestations are added
 }
 
 // Create packs source (a directory) into "<name>.caisson" in the current
@@ -114,6 +129,16 @@ func Create(source string, opts CreateOptions) (*Manifest, string, error) {
 		return nil, "", err
 	}
 
+	sbomDoc, err := sbom.Generate(source, name, version, now)
+	if err != nil {
+		return nil, "", err
+	}
+	sbomBytes, err := sbomDoc.JSON()
+	if err != nil {
+		return nil, "", err
+	}
+	sbomSum := sha256.Sum256(sbomBytes)
+
 	m := &Manifest{
 		FormatVersion: FormatVersion,
 		Name:          name,
@@ -124,7 +149,14 @@ func Create(source string, opts CreateOptions) (*Manifest, string, error) {
 		TotalSize:     total,
 		Digest:        digestOf(files),
 		Signed:        opts.Signer != nil,
-		Files:         files,
+		SBOM: &SBOMRef{
+			Format:      sbom.Format,
+			SpecVersion: sbom.SpecVersion,
+			Path:        sbomFileName,
+			SHA256:      hex.EncodeToString(sbomSum[:]),
+			Components:  len(sbomDoc.Components),
+		},
+		Files: files,
 	}
 
 	manifestJSON, err := json.MarshalIndent(m, "", "  ")
@@ -133,7 +165,7 @@ func Create(source string, opts CreateOptions) (*Manifest, string, error) {
 	}
 
 	var sig *Signature
-	var prov *signing.Envelope
+	var prov, sbomAtt *signing.Envelope
 	if opts.Signer != nil {
 		if sig, err = buildSignature(opts.Signer, manifestJSON); err != nil {
 			return nil, "", err
@@ -141,10 +173,13 @@ func Create(source string, opts CreateOptions) (*Manifest, string, error) {
 		if prov, err = buildProvenance(opts.Signer, m, now); err != nil {
 			return nil, "", err
 		}
+		if sbomAtt, err = buildSBOMAttestation(opts.Signer, m, sbomDoc); err != nil {
+			return nil, "", err
+		}
 	}
 
 	out := name + Extension
-	if err := writeArchive(out, source, m, manifestJSON, sig, prov, now); err != nil {
+	if err := writeArchive(out, source, m, manifestJSON, sbomBytes, sig, prov, sbomAtt, now); err != nil {
 		return nil, "", err
 	}
 	return m, out, nil
@@ -178,6 +213,15 @@ func buildProvenance(k *signing.Key, m *Manifest, now time.Time) (*signing.Envel
 		})
 	}
 	stmt := attest.Provenance(m.Name, m.Source, strings.TrimPrefix(m.Digest, "sha256:"), materials, now)
+	payload, err := json.Marshal(stmt)
+	if err != nil {
+		return nil, err
+	}
+	return k.WrapDSSE(payload)
+}
+
+func buildSBOMAttestation(k *signing.Key, m *Manifest, doc *sbom.Document) (*signing.Envelope, error) {
+	stmt := attest.SBOM(m.Name, strings.TrimPrefix(m.Digest, "sha256:"), doc)
 	payload, err := json.Marshal(stmt)
 	if err != nil {
 		return nil, err
@@ -249,8 +293,7 @@ func hashFile(path string) (string, int64, error) {
 }
 
 // digestOf computes the overall content digest: sha256 over the sorted
-// "sha256  path" lines. Independent of timestamps and archive framing, so it is
-// stable across rebuilds of identical content.
+// "sha256  path" lines. Independent of timestamps and archive framing.
 func digestOf(files []FileEntry) string {
 	h := sha256.New()
 	for _, f := range files {
@@ -259,7 +302,7 @@ func digestOf(files []FileEntry) string {
 	return "sha256:" + hex.EncodeToString(h.Sum(nil))
 }
 
-func writeArchive(outPath, source string, m *Manifest, manifestJSON []byte, sig *Signature, prov *signing.Envelope, now time.Time) (err error) {
+func writeArchive(outPath, source string, m *Manifest, manifestJSON, sbomBytes []byte, sig *Signature, prov, sbomAtt *signing.Envelope, now time.Time) (err error) {
 	out, err := os.Create(outPath)
 	if err != nil {
 		return err
@@ -277,21 +320,25 @@ func writeArchive(outPath, source string, m *Manifest, manifestJSON []byte, sig 
 	if err := writeBytes(tw, manifestName, manifestJSON, now); err != nil {
 		return err
 	}
-	if sig != nil {
-		sj, err := json.MarshalIndent(sig, "", "  ")
-		if err != nil {
-			return err
-		}
-		if err := writeBytes(tw, signatureName, sj, now); err != nil {
-			return err
-		}
+	if err := writeBytes(tw, sbomFileName, sbomBytes, now); err != nil {
+		return err
 	}
-	if prov != nil {
-		pj, err := json.MarshalIndent(prov, "", "  ")
+	for _, part := range []struct {
+		name string
+		val  any
+	}{
+		{signatureName, sig},
+		{provenanceName, prov},
+		{sbomAttName, sbomAtt},
+	} {
+		if isNil(part.val) {
+			continue
+		}
+		data, err := json.MarshalIndent(part.val, "", "  ")
 		if err != nil {
 			return err
 		}
-		if err := writeBytes(tw, provenanceName, pj, now); err != nil {
+		if err := writeBytes(tw, part.name, data, now); err != nil {
 			return err
 		}
 	}
@@ -304,6 +351,17 @@ func writeArchive(outPath, source string, m *Manifest, manifestJSON []byte, sig 
 		return err
 	}
 	return gz.Close()
+}
+
+func isNil(v any) bool {
+	switch t := v.(type) {
+	case *Signature:
+		return t == nil
+	case *signing.Envelope:
+		return t == nil
+	default:
+		return v == nil
+	}
 }
 
 func writeBytes(tw *tar.Writer, name string, data []byte, now time.Time) error {
@@ -347,6 +405,11 @@ func Open(path string) (*Manifest, error) {
 	return &m, nil
 }
 
+// ReadSBOM returns the embedded CycloneDX SBOM bytes, if present.
+func ReadSBOM(path string) ([]byte, bool, error) {
+	return readMember(path, sbomFileName)
+}
+
 // readMember returns the raw bytes of a named archive member.
 func readMember(path, name string) ([]byte, bool, error) {
 	f, err := os.Open(path)
@@ -377,9 +440,9 @@ func readMember(path, name string) ([]byte, bool, error) {
 	return nil, false, nil
 }
 
-// Verify recomputes the payload digest from the archive bytes and compares it to
-// the sealed manifest digest. A false result means the payload was altered after
-// sealing.
+// Verify recomputes the payload digest and checks the embedded SBOM's integrity
+// against the manifest. A false result means the payload or SBOM was altered
+// after sealing.
 func Verify(path string) (ok bool, m *Manifest, err error) {
 	m, err = Open(path)
 	if err != nil {
@@ -389,7 +452,19 @@ func Verify(path string) (ok bool, m *Manifest, err error) {
 	if err != nil {
 		return false, m, err
 	}
-	return computed == m.Digest, m, nil
+	ok = computed == m.Digest
+
+	if m.SBOM != nil {
+		data, present, err := readMember(path, m.SBOM.Path)
+		if err != nil {
+			return false, m, err
+		}
+		sum := sha256.Sum256(data)
+		if !present || hex.EncodeToString(sum[:]) != m.SBOM.SHA256 {
+			ok = false
+		}
+	}
+	return ok, m, nil
 }
 
 func payloadDigest(path string) (string, error) {
@@ -432,17 +507,20 @@ func payloadDigest(path string) (string, error) {
 
 // SignatureResult reports the outcome of verifying a vault's signature.
 type SignatureResult struct {
-	Present           bool
-	Valid             bool // signature verifies against the vault's embedded key
-	KeyID             string
-	IdentityMatch     *bool // set when a public key is provided: embedded key == provided?
-	ProvenancePresent bool
-	ProvenanceValid   bool
+	Present                bool
+	Valid                  bool // signature verifies against the vault's embedded key
+	KeyID                  string
+	IdentityMatch          *bool // set when a public key is provided: embedded key == provided?
+	ProvenancePresent      bool
+	ProvenanceValid        bool
+	SBOMAttestationPresent bool
+	SBOMAttestationValid   bool
 }
 
 // VerifySignature checks the vault's Ed25519 signature over the manifest and, if
-// present, the DSSE-wrapped SLSA provenance. When providedPubPEM is non-nil it
-// also reports whether the vault was signed by that specific key.
+// present, the DSSE-wrapped SLSA provenance and CycloneDX SBOM attestations.
+// When providedPubPEM is non-nil it also reports whether the vault was signed by
+// that specific key.
 func VerifySignature(path string, providedPubPEM []byte) (*SignatureResult, error) {
 	res := &SignatureResult{}
 
@@ -489,20 +567,22 @@ func VerifySignature(path string, providedPubPEM []byte) (*SignatureResult, erro
 		res.IdentityMatch = &match
 	}
 
-	provBytes, ok, err := readMember(path, provenanceName)
-	if err != nil {
-		return res, err
-	}
-	if ok {
-		res.ProvenancePresent = true
-		var env signing.Envelope
-		if err := json.Unmarshal(provBytes, &env); err == nil {
-			if _, valid := key.VerifyDSSE(&env); valid {
-				res.ProvenanceValid = true
-			}
-		}
-	}
+	res.ProvenancePresent, res.ProvenanceValid = verifyEnvelope(path, provenanceName, key)
+	res.SBOMAttestationPresent, res.SBOMAttestationValid = verifyEnvelope(path, sbomAttName, key)
 	return res, nil
+}
+
+func verifyEnvelope(path, name string, key *signing.Key) (present, valid bool) {
+	data, ok, err := readMember(path, name)
+	if err != nil || !ok {
+		return false, false
+	}
+	var env signing.Envelope
+	if err := json.Unmarshal(data, &env); err != nil {
+		return true, false
+	}
+	_, v := key.VerifyDSSE(&env)
+	return true, v
 }
 
 // classify maps a path to a coarse content type for the inventory.

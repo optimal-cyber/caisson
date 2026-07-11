@@ -19,7 +19,8 @@ demo: build ## Generate a key, sign+pack the sample app, verify, and read it bac
 	@echo "\n== package create (signed) ==" && ./$(BIN) package create ./examples/hello-app --version 1.0.0 --key caisson-demo.key
 	@echo "\n== verify (seal + signature + SLSA provenance) ==" && ./$(BIN) verify hello-app.caisson --key caisson-demo.pub
 	@echo "\n== package inspect ==" && ./$(BIN) package inspect hello-app.caisson
-	@echo "\n== sbom view =="       && ./$(BIN) sbom view hello-app.caisson
+	@echo "\n== sbom view (real CycloneDX) ==" && ./$(BIN) sbom view hello-app.caisson
+	@echo "\n== sbom export ==" && ./$(BIN) sbom export hello-app.caisson --out ./evidence
 	@echo "\n== deploy ==" && ./$(BIN) deploy hello-app.caisson --evidence-export
 	@echo "\n== evidence export ==" && ./$(BIN) evidence export hello-app.caisson --out ./evidence
 

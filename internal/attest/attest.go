@@ -10,8 +10,9 @@ import "time"
 
 // Statement and predicate type URIs.
 const (
-	StatementType     = "https://in-toto.io/Statement/v1"
-	SLSAPredicateType = "https://slsa.dev/provenance/v1"
+	StatementType          = "https://in-toto.io/Statement/v1"
+	SLSAPredicateType      = "https://slsa.dev/provenance/v1"
+	CycloneDXPredicateType = "https://cyclonedx.org/bom"
 
 	// BuildType identifies how a Caisson vault is produced.
 	BuildType = "https://caisson.gooptimal.io/buildtypes/package-create/v0.1"
@@ -87,5 +88,20 @@ func Provenance(name, source, digestHex string, materials []ResourceDescriptor, 
 				Metadata: Metadata{StartedOn: builtAt.UTC().Format(time.RFC3339)},
 			},
 		},
+	}
+}
+
+// SBOM builds an in-toto CycloneDX SBOM attestation statement for a vault. The
+// predicate is the CycloneDX document itself; digestHex is the vault's content
+// digest as bare hex.
+func SBOM(name, digestHex string, cyclonedx any) *Statement {
+	return &Statement{
+		Type: StatementType,
+		Subject: []Subject{{
+			Name:   name + ".caisson",
+			Digest: map[string]string{"sha256": digestHex},
+		}},
+		PredicateType: CycloneDXPredicateType,
+		Predicate:     cyclonedx,
 	}
 }

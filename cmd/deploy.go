@@ -84,13 +84,25 @@ func runDeploy(c *cobra.Command, args []string) error {
 }
 
 func provNote(sr *pkgformat.SignatureResult) string {
-	if sr.ProvenancePresent && sr.ProvenanceValid {
-		return " · SLSA provenance valid"
-	}
+	var parts []string
 	if sr.ProvenancePresent {
-		return " · SLSA provenance INVALID"
+		if sr.ProvenanceValid {
+			parts = append(parts, "SLSA provenance valid")
+		} else {
+			parts = append(parts, "SLSA provenance INVALID")
+		}
 	}
-	return ""
+	if sr.SBOMAttestationPresent {
+		if sr.SBOMAttestationValid {
+			parts = append(parts, "SBOM attestation valid")
+		} else {
+			parts = append(parts, "SBOM attestation INVALID")
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " · " + joinComma(parts)
 }
 
 func init() {

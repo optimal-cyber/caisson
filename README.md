@@ -74,8 +74,9 @@ go build -o caisson .
 # 2. INSPECT what a sealed vault carries (read-only)
 ./caisson package inspect hello-app.caisson
 
-# 3. read the sealed file inventory
+# 3. read the sealed CycloneDX SBOM (deps detected from the payload) or export it
 ./caisson sbom view hello-app.caisson
+./caisson sbom export hello-app.caisson --out ./evidence   # → ./evidence/hello-app.cdx.json
 
 # 4. DEPLOY — verifies the payload digest against the sealed manifest first.
 #    A tampered vault is refused (non-zero exit); registry push + k8s apply
@@ -94,16 +95,18 @@ go build -o caisson .
 > `caisson deploy` is the convenience form of `caisson package deploy` — both do the same thing.
 
 **What's real vs. scaffold today.** Real work: `package create` writes a standard gzip+tar
-`.caisson` (open it with `tar -tzf`) with a per-file SHA-256 inventory and content digest,
-and — with `--key` — an **Ed25519 signature** over the manifest plus a **DSSE-wrapped SLSA
-provenance attestation**; `package inspect` and `sbom view` read it back; `verify` and
-`deploy` check the seal, signature, identity, and provenance and **refuse a tampered or
+`.caisson` (open it with `tar -tzf`) with a per-file SHA-256 inventory and content digest, an
+embedded **CycloneDX 1.6 SBOM** (dependencies detected from go.mod / package.json /
+requirements.txt / Dockerfile), and — with `--key` — an **Ed25519 signature** plus
+**DSSE-wrapped SLSA provenance and CycloneDX SBOM attestations**; `package inspect`,
+`sbom view`, and `sbom export` read them back; `verify` and `deploy` check the seal,
+signature, identity, provenance, and SBOM attestation and **refuse a tampered or
 badly-signed vault** (non-zero exit); and `evidence export` writes a real bundle to disk
 (native JSON, an OSCAL-aligned assessment-results file, and a Markdown report) whose control
-mapping reflects the artifact's actual state — e.g. `SR-11` flips to *satisfied* once the
-vault is signed. Still placeholder (clearly marked in output): Sigstore/cosign keyless
-interop, a full dependency SBOM (Syft), vulnerability scans feeding `RA-5`, schema-validated
-OSCAL, and the actual registry push / Kubernetes apply.
+mapping reflects the artifact's actual state — e.g. `SR-11` flips to *satisfied* once signed,
+and `CM-8`/`SA-12` cite the real SBOM component count. Still placeholder (clearly marked in
+output): Sigstore/cosign keyless interop, deeper SBOM resolution (Syft), vulnerability scans
+feeding `RA-5`, schema-validated OSCAL, and the actual registry push / Kubernetes apply.
 
 ### Test it locally
 

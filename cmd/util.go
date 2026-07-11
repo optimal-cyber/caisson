@@ -8,6 +8,14 @@ import (
 // joinComma joins parts with ", ".
 func joinComma(parts []string) string { return strings.Join(parts, ", ") }
 
+func errUnsupportedFormat(f string) error {
+	return fmt.Errorf("unsupported SBOM format %q (only cyclonedx)", f)
+}
+
+func errNoSBOM(path string) error {
+	return fmt.Errorf("no embedded SBOM found in %s", path)
+}
+
 // humanSize renders a byte count as a compact human-readable string.
 func humanSize(n int64) string {
 	const unit = 1024

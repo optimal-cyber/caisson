@@ -59,9 +59,12 @@ inventory is file-level.`,
 		note(c, "package create: sealed %q\n", src)
 		note(c, "  ✓ packed %d files · %s", m.FileCount, humanSize(m.TotalSize))
 		note(c, "  ✓ per-file SHA-256 recorded · content digest computed")
+		if m.SBOM != nil {
+			note(c, "  ✓ %s %s SBOM embedded (%d components)", m.SBOM.Format, m.SBOM.SpecVersion, m.SBOM.Components)
+		}
 		note(c, "  ✓ manifest sealed (format %s)", m.FormatVersion)
 		if m.Signed {
-			note(c, "  ✓ signed (ed25519, keyId %s) · SLSA provenance attested", short(signer.KeyID()))
+			note(c, "  ✓ signed (ed25519, keyId %s) · SLSA provenance + CycloneDX SBOM attested", short(signer.KeyID()))
 		} else {
 			note(c, "  · unsigned (pass --key <caisson.key> to sign + attest)")
 		}

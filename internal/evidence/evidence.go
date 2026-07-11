@@ -92,12 +92,19 @@ func Collect(m *pkgformat.Manifest, now time.Time) *Bundle {
 	digestRef := "content digest " + m.Digest
 	inventoryRef := fmt.Sprintf("sealed inventory (%d files, manifest.json)", m.FileCount)
 
+	sbomRef := "file inventory"
+	sbomRationale := ""
+	if m.SBOM != nil {
+		sbomRef = fmt.Sprintf("%s %s SBOM (%d components, sbom.cdx.json)", m.SBOM.Format, m.SBOM.SpecVersion, m.SBOM.Components)
+		sbomRationale = fmt.Sprintf(" A %s %s SBOM enumerating %d dependency components travels sealed inside the vault.", m.SBOM.Format, m.SBOM.SpecVersion, m.SBOM.Components)
+	}
+
 	controls := []Control{
 		{
 			ID: "CM-8", Title: "System Component Inventory", Framework: NIST80053,
 			Status:    Satisfied,
-			Rationale: fmt.Sprintf("The vault carries a sealed inventory of %d files, each with a recorded SHA-256.", m.FileCount),
-			Evidence:  []string{inventoryRef},
+			Rationale: fmt.Sprintf("The vault carries a sealed inventory of %d files, each with a recorded SHA-256.%s", m.FileCount, sbomRationale),
+			Evidence:  []string{inventoryRef, sbomRef},
 		},
 		{
 			ID: "SI-7", Title: "Software, Firmware, and Information Integrity", Framework: NIST80053,
@@ -108,8 +115,8 @@ func Collect(m *pkgformat.Manifest, now time.Time) *Bundle {
 		{
 			ID: "SA-12", Title: "Supply Chain Protection", Framework: NIST80053,
 			Status:    Satisfied,
-			Rationale: "The application and its declared contents travel as one sealed, integrity-checked artifact across the airgap.",
-			Evidence:  []string{"manifest.json", digestRef},
+			Rationale: "The application and its declared contents travel as one sealed, integrity-checked artifact across the airgap, with a bill of materials bound to the manifest.",
+			Evidence:  []string{"manifest.json", digestRef, sbomRef},
 		},
 		componentAuthenticity(m, digestRef),
 		{
